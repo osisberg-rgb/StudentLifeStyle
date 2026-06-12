@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  SafeAreaView, ActivityIndicator, Alert,
+  SafeAreaView, ActivityIndicator, Alert, Image,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Colors, Radii } from '../constants/theme';
@@ -18,9 +18,7 @@ import { slåEffektivPrisOp } from '../constants/tilbudspriser';
 import { hentOpskriftPriser } from '../constants/opskriftPriser';
 import { tagForvalgteRetter } from '../constants/onboardingHandoff';
 import { sætValgtUge, hentValgtUge } from '../constants/ugeState';
-
-const MALTID_IKONER = { morgenmad: '🌅', frokost: '🥙', aftensmad: '🍽️' };
-const MALTID_LABELS = { morgenmad: 'Morgenmad', frokost: 'Frokost', aftensmad: 'Aftensmad' };
+import { hentBillede } from '../constants/opskriftBilleder';
 
 export default function PlanerScreen() {
   const [madplan, setMadplan] = useState<Madplan | null>(null);
@@ -43,26 +41,14 @@ export default function PlanerScreen() {
   // Mandag = 0 ... søndag = 6, samme rækkefølge som plan.dage
   const iDagIndex = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
 
-  // Hvilken dag laves retten? Første dag hvor den står som aftensmad
-  // (rester tæller ikke — de følger med, når selve retten byttes).
-  function dagIndexForRet(navn: string): number | null {
-    const dage = madplan?.dage ?? [];
-    for (let i = 0; i < dage.length; i++) {
-      const a = dage[i]?.aftensmad;
-      if (a?.navn && !a.rester_fra && a.navn.toLowerCase() === navn.toLowerCase()) return i;
-    }
-    return null;
-  }
-
-  // Dag-lås: passerede dage i indeværende uge kan ikke byttes — maden er
-  // (formentlig) købt og lavet. Fremtidige uger kan altid redigeres,
-  // tidligere uger aldrig.
-  function kanRetByttes(navn: string): boolean {
+  // Dag-lås: første dag der stadig må ændres. 0 i fremtidige uger,
+  // i dag i indeværende uge, null i tidligere uger (alt er historie).
+  // Bruges både af dag-kortets Byt-knap og af bytRetUd, så en ret kun
+  // kan byttes på dage fra i dag og frem.
+  function førsteFrieDag(): number | null {
     const nuUge = getWeekNumber();
-    if (uge < nuUge) return false;
-    if (uge > nuUge) return true;
-    const dagIdx = dagIndexForRet(navn);
-    return dagIdx == null || dagIdx >= iDagIndex;
+    if (uge < nuUge) return null;
+    return uge > nuUge ? 0 : iDagIndex;
   }
 
   useFocusEffect(
@@ -205,10 +191,6 @@ export default function PlanerScreen() {
     const gammelTotal = madplan.indkoebspris ?? madplan.total ?? 0;
     const nyPortioner = info?.portioner ?? (opskrift.portioner || 4);
 
-    const nyeValgte = (madplan.valgte_opskrifter ?? []).map(r =>
-      r.id === gammel.id ? { id: nyId, navn: opskrift.navn, portioner: nyPortioner } : r
-    );
-
     // Den nye rets måltid til dag-kortene — samme deterministiske priser
     // som resten af appen
     const nyeIngredienser: Ingrediens[] = (opskrift.ingredienser as any[])
@@ -223,7 +205,12 @@ export default function PlanerScreen() {
     const prisPrPortion = info && info.portioner > 0 ? Math.round(info.pris / info.portioner) : 0;
     const gNavn = gammel.navn.toLowerCase();
 
-    const nyeDage = (madplan.dage ?? []).map(d => {
+    // Kun dage fra i dag og frem skrives om — passerede dage er et
+    // dokument over hvad der faktisk blev lavet
+    const grænse = førsteFrieDag() ?? 0;
+
+    const nyeDage = (madplan.dage ?? []).map((d, di) => {
+      if (di < grænse) return d;
       const nyDag: any = { ...d };
       for (const t of ['morgenmad', 'frokost', 'aftensmad'] as const) {
         const m: any = nyDag[t];
@@ -242,6 +229,22 @@ export default function PlanerScreen() {
       }
       return nyDag;
     });
+
+    // Blev den gamle ret lavet på en passeret dag, er den stadig en del
+    // af ugen (og indkøbene) — behold den og tilføj den nye ved siden af.
+    // Ellers erstattes den helt.
+    const gammelStadigBrugt = nyeDage.some(d => {
+      const a: any = (d as any).aftensmad;
+      return a?.navn && !a.rester_fra && a.navn.toLowerCase() === gNavn;
+    });
+    const eksisterende = madplan.valgte_opskrifter ?? [];
+    const nyeValgte = gammelStadigBrugt
+      ? (eksisterende.some(r => r.id === nyId)
+          ? eksisterende
+          : [...eksisterende, { id: nyId, navn: opskrift.navn, portioner: nyPortioner }])
+      : eksisterende.map(r =>
+          r.id === gammel.id ? { id: nyId, navn: opskrift.navn, portioner: nyPortioner } : r
+        );
 
     const tjekkede = new Set<string>();
     for (const s of madplan.indkoebsliste ?? [])
@@ -321,73 +324,6 @@ export default function PlanerScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Dine valgte retter — fra deterministisk kilde */}
-        {madplan?.valgte_opskrifter && madplan.valgte_opskrifter.length > 0 && (
-          <View style={styles.valgteRetterSektion}>
-            <Text style={styles.retterTitel}>Dine valgte retter</Text>
-            {madplan.valgte_opskrifter.map((ret, i) => {
-              const opskrift = OPSKRIFTER.find(o => o.id === ret.id);
-              const kanByttes = kanRetByttes(ret.navn);
-              const dagIdx = dagIndexForRet(ret.navn);
-              const dagNavn = dagIdx != null ? madplan.dage?.[dagIdx]?.dag : null;
-              return (
-                <TouchableOpacity
-                  key={ret.id}
-                  style={styles.retRække}
-                  onPress={() => opskrift && setÅbenOpskrift(opskrift)}
-                  activeOpacity={opskrift ? 0.7 : 1}
-                >
-                  <View style={[styles.retNummer, styles.retNummerAktiv]}>
-                    <Text style={styles.retNummerTekst}>{i + 1}</Text>
-                  </View>
-                  <Text style={styles.retNavn} numberOfLines={1}>{ret.navn}</Text>
-                  <Text style={styles.retPortioner}>{ret.portioner} port.</Text>
-                  {kanByttes ? (
-                    <TouchableOpacity
-                      style={styles.bytKnap}
-                      onPress={() => setBytRet({ id: ret.id, navn: ret.navn })}
-                      hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
-                    >
-                      <Text style={styles.bytKnapTekst}>Byt</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    /* Dagen er passeret — maden er købt og (formentlig) lavet */
-                    <Text style={styles.retLåst}>🔒{dagNavn ? ` ${dagNavn.slice(0, 3)}` : ''}</Text>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
-
-        {/* Protein-ankre */}
-        {madplan?.proteinkilder && madplan.proteinkilder.length > 0 && (
-          <View style={styles.proteinRow}>
-            <Text style={styles.proteinLabel}>Bygget på: </Text>
-            {madplan.proteinkilder.map((p, i) => (
-              <View key={i} style={styles.proteinBadge}>
-                <Text style={styles.proteinBadgeTekst}>{p}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Spild / gemt info */}
-        {madplan && ((madplan.spild_kr ?? 0) > 0 || (madplan.gemt_vaerdi ?? 0) > 0) && (
-          <View style={styles.pantryRad}>
-            {(madplan.gemt_vaerdi ?? 0) > 0 && (
-              <View style={styles.pantryGemt}>
-                <Text style={styles.pantryTekst}>🫙 Gemt: {madplan.gemt_vaerdi} kr</Text>
-              </View>
-            )}
-            {(madplan.spild_kr ?? 0) > 0 && (
-              <View style={styles.pantrySpild}>
-                <Text style={styles.pantryTekst}>⚠️ Spild: {madplan.spild_kr} kr</Text>
-              </View>
-            )}
-          </View>
-        )}
-
         {/* Advarsel hvis planen er over budget */}
         {madplan?.advarsler && madplan.advarsler.length > 0 && (
           <View style={styles.advarsel}>
@@ -415,50 +351,75 @@ export default function PlanerScreen() {
           </View>
         )}
 
-        {/* Dag-kort med 3 måltider — dagens kort fremhæves, så man ikke
-            skal lede efter onsdag blandt 7 ens kort */}
+        {/* Dag-kort: kun aftensmaden, med opskriftens billede — det er det
+            spørgsmål planen svarer på. Dagens kort fremhæves. */}
         {!loading && !generating && madplan?.dage?.map((dag, i) => {
           const erIDag = uge === getWeekNumber() && i === iDagIndex;
-          return (
-          <View key={i} style={[styles.dagKort, erIDag && styles.dagKortIDag]}>
-            <View style={styles.dagHeader}>
-              <Text style={[styles.dagNavn, erIDag && styles.dagNavnIDag]}>{dag.dag.toUpperCase()}</Text>
-              {erIDag && (
-                <View style={styles.iDagBadge}>
-                  <Text style={styles.iDagBadgeTekst}>I dag</Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.dagDivider} />
-            {(['morgenmad', 'frokost', 'aftensmad'] as const).map(type => {
-              const maltid = dag[type];
-              if (!maltid) return null;
-              const erRester = !!maltid.rester_fra;
-              const primærButik = maltid.ingredienser?.find(i => i.butik)?.butik;
+          const aften = dag.aftensmad;
+          const erRester = !!aften?.rester_fra;
+          const rentNavn = aften?.navn?.replace(/^Rester:\s*/i, '').trim() ?? '';
+          const opskrift = findOpskriftForNavn(rentNavn);
+          const billede = opskrift ? hentBillede(opskrift.id) : null;
+          const minutter = (opskrift as any)?.minutter as number | undefined;
+          const butik = aften?.ingredienser?.find(ig => ig.butik)?.butik;
 
-              return (
-                <TouchableOpacity
-                  key={type}
-                  style={styles.maltidRække}
-                  onPress={() => åbnMaltid(dag, type)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.maltidIkon}>{MALTID_IKONER[type]}</Text>
-                  <View style={styles.maltidMidten}>
-                    <Text style={styles.maltidLabel}>{MALTID_LABELS[type]}</Text>
-                    <Text style={styles.maltidNavn} numberOfLines={1}>
-                      {erRester ? `Rester: ${maltid.navn.replace(/^Rester:\s*/i, '')}` : maltid.navn}
-                    </Text>
+          return (
+            <TouchableOpacity
+              key={i}
+              style={[styles.dagKort, erIDag && styles.dagKortIDag]}
+              onPress={() => aften?.navn && åbnMaltid(dag, 'aftensmad')}
+              activeOpacity={aften?.navn ? 0.8 : 1}
+            >
+              <View style={styles.dagHeader}>
+                <Text style={[styles.dagNavn, erIDag && styles.dagNavnIDag]}>{dag.dag.toUpperCase()}</Text>
+                {erIDag && (
+                  <View style={styles.iDagBadge}>
+                    <Text style={styles.iDagBadgeTekst}>I dag</Text>
                   </View>
-                  {primærButik && !erRester && (
-                    <View style={styles.maltidHøjre}>
-                      <ButiksPill name={primærButik} />
+                )}
+              </View>
+              {aften?.navn ? (
+                <View style={styles.aftenRække}>
+                  {billede ? (
+                    <Image source={billede} style={styles.aftenBillede} />
+                  ) : (
+                    <View style={[styles.aftenBillede, styles.aftenBilledeTom]}>
+                      <Text style={styles.aftenBilledeEmoji}>{erRester ? '🫕' : '🍽️'}</Text>
                     </View>
                   )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                  <View style={styles.aftenInfo}>
+                    {erRester && <Text style={styles.resterTag}>RESTER</Text>}
+                    <Text style={styles.aftenNavn} numberOfLines={2}>{rentNavn}</Text>
+                    <View style={styles.aftenMeta}>
+                      {minutter != null && !erRester && (
+                        <Text style={styles.aftenTid}>⏱ {minutter} min</Text>
+                      )}
+                      {butik && !erRester ? <ButiksPill name={butik} /> : null}
+                    </View>
+                  </View>
+                  {/* Byt direkte fra dag-kortet — låsen følger KORTETS dag:
+                      i dag og frem kan byttes, også selvom retten først blev
+                      lavet tidligere på ugen. Rester følger med automatisk. */}
+                  {!erRester && opskrift && (
+                    (() => { const g = førsteFrieDag(); return g != null && i >= g; })() ? (
+                      <TouchableOpacity
+                        style={styles.bytKnap}
+                        onPress={() => setBytRet({ id: opskrift.id, navn: rentNavn })}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                      >
+                        <Text style={styles.bytKnapTekst}>Byt</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={styles.retLåst}>🔒</Text>
+                    )
+                  )}
+                </View>
+              ) : (
+                <View style={styles.aftenRække}>
+                  <Text style={styles.aftenTom}>Ingen ret planlagt</Text>
+                </View>
+              )}
+            </TouchableOpacity>
           );
         })}
       </ScrollView>
@@ -514,6 +475,16 @@ function getWeekNumber() {
   return Math.ceil((((now.getTime() - start.getTime()) / 86400000) + start.getDay() + 1) / 7);
 }
 
+// Slå opskriften op ud fra måltidsnavnet — samme opslag som forsiden
+// bruger til "I aften"-kortet, så billede og tid altid matcher
+function findOpskriftForNavn(navn: string): typeof OPSKRIFTER[0] | null {
+  if (!navn) return null;
+  const n = navn.toLowerCase();
+  return OPSKRIFTER.find(o => o.navn.toLowerCase() === n)
+    ?? OPSKRIFTER.find(o => n.includes(o.navn.toLowerCase()))
+    ?? null;
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.canvas },
   header: {
@@ -535,26 +506,6 @@ const styles = StyleSheet.create({
   ugeArrow: { fontSize: 28, color: '#fff', paddingHorizontal: 8 },
   ugeNr: { fontSize: 18, fontFamily: 'BricolageGrotesque_700Bold', color: '#fff', letterSpacing: -0.3 },
   ugeSub: { fontSize: 12, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.75)', marginTop: 2 },
-  proteinRow: {
-    flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap',
-    marginBottom: 10, gap: 6,
-  },
-  proteinLabel: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.inkSoft },
-  proteinBadge: {
-    backgroundColor: Colors.greenSoft, borderRadius: 999,
-    paddingHorizontal: 10, paddingVertical: 4,
-  },
-  proteinBadgeTekst: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: Colors.green },
-  pantryRad: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  pantryGemt: {
-    flex: 1, backgroundColor: Colors.greenSoft, borderRadius: Radii.btn,
-    padding: 10, alignItems: 'center',
-  },
-  pantrySpild: {
-    flex: 1, backgroundColor: '#FFF8E1', borderRadius: Radii.btn,
-    padding: 10, alignItems: 'center', borderWidth: 1, borderColor: Colors.yellow,
-  },
-  pantryTekst: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.ink },
   advarsel: {
     backgroundColor: '#FFF8E1', borderRadius: Radii.btn, padding: 12,
     marginBottom: 14, borderWidth: 1, borderColor: Colors.yellow,
@@ -587,41 +538,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9, paddingVertical: 2,
   },
   iDagBadgeTekst: { fontSize: 11, fontFamily: 'Inter_700Bold', color: '#fff' },
-  dagDivider: { height: 1, backgroundColor: Colors.line, marginHorizontal: 16 },
-  maltidRække: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: Colors.line,
+  aftenRække: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingBottom: 14, gap: 12,
   },
-  maltidIkon: { fontSize: 18, marginRight: 12, width: 24, textAlign: 'center' },
-  maltidMidten: { flex: 1, marginRight: 8 },
-  maltidLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', color: Colors.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
-  maltidNavn: { fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.ink },
-  maltidHøjre: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  maltidPris: { fontSize: 14, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.ink },
-  maltidPrisFri: { color: Colors.greenBright },
-  valgteRetterSektion: {
-    backgroundColor: Colors.greenSoft, borderRadius: Radii.card,
-    borderWidth: 1, borderColor: Colors.green, padding: 16, marginBottom: 12,
+  aftenBillede: {
+    width: 80, height: 80, borderRadius: Radii.thumb,
+    backgroundColor: Colors.line,
   },
-  retterTitel: {
-    fontSize: 11, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.green,
-    letterSpacing: 1, textTransform: 'uppercase',
+  aftenBilledeTom: { alignItems: 'center', justifyContent: 'center' },
+  aftenBilledeEmoji: { fontSize: 30 },
+  aftenInfo: { flex: 1 },
+  resterTag: {
+    fontSize: 10, fontFamily: 'Inter_700Bold', color: Colors.inkSoft,
+    letterSpacing: 0.8, marginBottom: 2,
   },
-  retRække: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.line,
+  aftenNavn: {
+    fontSize: 16, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.ink,
+    letterSpacing: -0.2,
   },
-  retDetaljeHint: {
-    fontSize: 18, color: Colors.inkSoft, marginLeft: 4,
-  },
-  retNummer: {
-    width: 28, height: 28, borderRadius: 14,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  retNummerAktiv: { backgroundColor: Colors.greenBright },
-  retNummerTekst: { fontSize: 13, fontFamily: 'Inter_700Bold', color: '#fff' },
-  retNavn: { flex: 1, fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.ink },
-  retPortioner: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.inkSoft },
+  aftenMeta: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
+  aftenTid: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: Colors.inkSoft },
+  aftenTom: { fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, fontStyle: 'italic' },
   bytKnap: {
     backgroundColor: Colors.card, borderRadius: 999,
     borderWidth: 1, borderColor: Colors.green,
