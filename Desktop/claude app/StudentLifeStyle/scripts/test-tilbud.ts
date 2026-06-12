@@ -10,6 +10,7 @@ import { hentOpskriftPriser } from '../constants/opskriftPriser';
 import { KATEGORIER } from '../constants/kategorier';
 import { findAnbefaledeRetter, måltiderPrRet, MAKS_RETTER, UGE_MAAL } from '../constants/anbefaling';
 import { beregnPlanBesparelse, beregnSamletBesparelse, beregnPlanPris, byggUgeSerie, formatKr } from '../constants/besparelse';
+import { byggUgeplan } from '../constants/ugeplan';
 
 let fejl = 0;
 function tjek(navn: string, ok: boolean, detalje = '') {
@@ -337,6 +338,45 @@ tjek('byggUgeSerie: rækker uden ugenummer springes over', serie.length === 2, `
 tjek('byggUgeSerie: sorteret stigende efter uge', serie[0].uge === 24 && serie[1].uge === 25,
   serie.map(u => u.uge).join(','));
 tjek('byggUgeSerie: spar og pris mappet korrekt', serie[0].spar === 32 && serie[0].pris === 184);
+
+console.log('\n=== 16. Deterministisk uge-layout (byggUgeplan) ===');
+const ugeIds = ['pasta-kodsovs-okse', 'chili-con-carne', 'pasta-kylling-panderet'];
+const planFam = byggUgeplan(ugeIds, undefined, 4, 24, 400);
+tjek('Planen har 7 dage', planFam.dage.length === 7, `${planFam.dage.length} dage`);
+tjek('Uge-nr sættes', planFam.uge === 24);
+tjek('Valgte opskrifter bevares', planFam.valgte_opskrifter?.length === 3,
+  `${planFam.valgte_opskrifter?.length}`);
+tjek('Indkøbsliste + pris beregnet deterministisk',
+  planFam.indkoebspris > 0 && planFam.indkoebsliste.length > 0,
+  `${planFam.indkoebspris} kr, ${planFam.indkoebsliste.length} sektioner`);
+tjek('Pris matcher bygIndkøbsliste direkte',
+  planFam.indkoebspris === Math.round(totalAf(bygIndkøbsliste(ugeIds, undefined, 4))),
+  `${planFam.indkoebspris} kr`);
+
+// 4 pers på 4-portions retter = 1 aften pr. ret → ingen rester, 3 kogte aftener
+const kogteFam = planFam.dage.filter(d => d.aftensmad.navn && !d.aftensmad.rester_fra);
+tjek('4 pers, 3 retter à 4 port: 3 kogte aftener (ingen rester)',
+  kogteFam.length === 3, `${kogteFam.length} kogte`);
+
+// 2 pers på 4-portions retter = 2 aftener pr. ret → kogt + rester
+const planPar = byggUgeplan(['pasta-kodsovs-okse', 'chili-con-carne'], undefined, 2, 24, 300);
+const kogtePar = planPar.dage.filter(d => d.aftensmad.navn && !d.aftensmad.rester_fra);
+const resterPar = planPar.dage.filter(d => d.aftensmad.rester_fra);
+tjek('2 pers, 2 retter à 4 port: 2 kogte + 2 rester-aftener',
+  kogtePar.length === 2 && resterPar.length === 2,
+  `${kogtePar.length} kogte, ${resterPar.length} rester`);
+tjek('Rester refererer rettens NAVN (så byt kan finde dem)',
+  resterPar.every(d => planPar.valgte_opskrifter!.some(r => r.navn === d.aftensmad.rester_fra)),
+  resterPar.map(d => d.aftensmad.rester_fra).join(', '));
+
+// Rester-aften kommer EFTER den kogte (man laver først, spiser rester bagefter)
+const førsteKogt = planPar.dage.findIndex(d => d.aftensmad.navn && !d.aftensmad.rester_fra);
+const førsteRest = planPar.dage.findIndex(d => d.aftensmad.rester_fra);
+tjek('Rester ligger efter den kogte aften', førsteRest > førsteKogt,
+  `kogt dag ${førsteKogt}, rester dag ${førsteRest}`);
+
+tjek('Over budget → advarsel', byggUgeplan(ugeIds, undefined, 4, 24, 10).advarsler!.length > 0);
+tjek('Inden for budget → ingen advarsel', planFam.advarsler!.length === 0);
 
 console.log('');
 if (fejl > 0) throw new Error(`${fejl} test(s) FEJLEDE`);

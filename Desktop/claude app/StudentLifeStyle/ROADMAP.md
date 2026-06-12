@@ -154,15 +154,17 @@ Tallet flyttes af brugerantal og fastholdelse — ikke af prisen.
   12 px, og ingen teknologi-snak ("AI" nævnes aldrig i UI'et — forældre vil have
   aftensmad, ikke teknologi).
 - Alle priser beregnes deterministisk i appen (basispriser + tilbud) — AI'en må aldrig
-  igen eje et tal, brugeren ser. På sigt: lav også uge-layoutet uden AI (øjeblikkeligt,
-  gratis, offline) med AI som valgfrit krydderi.
+  igen eje et tal, brugeren ser. ✔ Uge-layoutet er nu OGSÅ uden AI (jun 2026,
+  constants/ugeplan.ts): øjeblikkeligt, gratis, offline.
 - Værdien skal være synlig i kroner, altid: pr. vare, pr. ret, pr. uge, akkumuleret.
 
 ## Teknisk gæld (ikke akut, men kendt)
 
 - [ ] `getWeekNumber()` er dubleret i 3+ filer og er upræcis ved årsskift → saml i én
       delt funktion (skal matche `aktuelUge()` i tilbudspriser.ts)
-- [ ] Edge-funktionen har egne kopier af basispriser/opskrifter → holdes manuelt i sync
+- [ ] Edge-funktionen (`dynamic-action`) er IKKE længere i appens kritiske vej —
+      plan-generering er flyttet til constants/ugeplan.ts (deterministisk, ingen AI).
+      Funktionen + dens opskrift-/basispris-kopier + OPENAI_API_KEY kan slettes helt.
 - [ ] `tilbudsaviser`-storage-bucket er død — app-koden er renset (jun 2026:
       MadplanScreen slettet, storage-kald fjernet fra plan-generering) →
       slet selve bucket'en i Supabase-dashboardet
@@ -191,3 +193,4 @@ Tallet flyttes af brugerantal og fastholdelse — ikke af prisen.
 | 12. jun 2026 | Byt-en-ret med dag-lås: en rets dag = første dag den står som aftensmad (rester følger med ved byt). Passerede dage er låst — planen er et dokument over hvad der ER købt, ikke kun hvad der skal købes |
 | 12. jun 2026 | Besparelse over tid: søjlediagram uden chart-bibliotek (rene Views, samme flade stil som progress-barerne) — holder bundlen lille. Per-uge serie og akkumuleret sum kommer fra ÉT DB-kald (udvidet useSamletBesparelse), så forsiden ikke laver ekstra queries |
 | 12. jun 2026 | Flerbutiksarkitektur: én TypeScript-fil pr. butik (constants/tilbud/<butik>.ts). Motor merger alle valgte butikskilder i hukommelsen og vælger billigste pris pr. ingrediens. Uge-nr tjekkes automatisk — forkert nr = filen ignoreres. Ugeopdatering: kun `uge:` og `varer[]` ændres, ingen kode. Indkøbslisten viser farvet butiksbadge på varer der er på tilbud. |
+| 12. jun 2026 | Plan-generering er nu HELT uden AI (constants/ugeplan.ts). Det gamle GPT-4o-kald brugte 30-90 sek på at skrive ~10k tokens JSON, hvoraf næsten alt blev smidt væk (indkøbsliste/pris/besparelse genberegnes deterministisk; morgenmad/frokost/proteinkilder/gemt vises ikke). Nu fordeles de valgte retter på dagene med samme måltiderPrRet/rester-matematik som anbefalingen — øjeblikkeligt, gratis, offline. Rester refererer rettens navn (så byt finder dem). Planer-fanen viser kun aftensmad. |

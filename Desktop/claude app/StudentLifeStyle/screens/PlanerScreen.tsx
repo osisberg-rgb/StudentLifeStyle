@@ -16,6 +16,7 @@ import { OPSKRIFTER } from '../constants/opskrifter';
 import { bygIndkøbsliste, beregnBesparelse } from '../constants/indkoeb';
 import { slåEffektivPrisOp } from '../constants/tilbudspriser';
 import { hentOpskriftPriser } from '../constants/opskriftPriser';
+import { byggUgeplan } from '../constants/ugeplan';
 import { tagForvalgteRetter } from '../constants/onboardingHandoff';
 import { sætValgtUge, hentValgtUge } from '../constants/ugeState';
 import { hentBillede } from '../constants/opskriftBilleder';
@@ -95,26 +96,10 @@ export default function PlanerScreen() {
   async function generer(opskriftIds: string[]) {
     setGenerating(true);
     try {
-      const { data: profil } = await supabase
-        .from('profiles').select('stores, budget_per_week, diet, household_size').maybeSingle();
-
-      const stores: string[] = profil?.stores ?? ['Netto'];
-      const planBudget: number = profil?.budget_per_week ?? 350;
-      const kostPræf: string[] = profil?.diet ?? ['Alt'];
-
-      const { data, error } = await supabase.functions.invoke('dynamic-action', {
-        body: { action: 'generate_meal_plan', budget: planBudget, personer, kost: kostPræf, stores, opskriftIds },
-      });
-      if (error) throw error;
-
-      // Byg indkøbslisten deterministisk fra valgte opskrifter, skaleret til personer
-      const autoListe = bygIndkøbsliste(opskriftIds, butikker, personer);
-      const autoTotal = autoListe.reduce((s, b) => s + b.subtotal, 0);
-      data.indkoebsliste = autoListe;
-      data.indkoebspris = autoTotal;
-      data.total = autoTotal;
-      data.besparelse = beregnBesparelse(autoListe);
-      data.antal_personer = personer;
+      // Byg hele planen deterministisk i appen — øjeblikkeligt, gratis, offline.
+      // (Ingen AI: dag-fordeling, rester, indkøbsliste og priser er alle
+      // beregnet med samme motor som resten af appen.)
+      const plan = byggUgeplan(opskriftIds, butikker, personer, uge, budget);
 
       const { data: { user: u } } = await supabase.auth.getUser();
       if (!u) throw new Error('Ikke logget ind');
@@ -123,13 +108,13 @@ export default function PlanerScreen() {
       const { error: gemFejl } = await supabase.from('madplaner').upsert({
         user_id: u.id,
         uge_nr: uge,
-        plan: data,
-        total_pris: autoTotal,
-        total_spar: data.besparelse ?? 0,
+        plan,
+        total_pris: plan.indkoebspris,
+        total_spar: plan.besparelse ?? 0,
       }, { onConflict: 'user_id,uge_nr' });
 
       if (gemFejl) throw new Error(`Gem fejlede: ${gemFejl.message}`);
-      setMadplan(data);
+      setMadplan(plan);
     } catch (e: any) {
       Alert.alert('Fejl', e.message ?? 'Prøv igen');
     } finally {
