@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -14,8 +14,12 @@ import {
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
 
+import { Ionicons } from '@expo/vector-icons';
+
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Colors } from './constants/theme';
+import { supabase } from './lib/supabase';
+import { harForvalgteRetter } from './constants/onboardingHandoff';
 
 import LoginScreen from './screens/LoginScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
@@ -28,22 +32,30 @@ const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
-  const icons: Record<string, [string, string]> = {
-    Hjem:    ['⌂', '⌂'],
-    Planer:  ['◫', '◫'],
-    Indkøb:  ['☑', '☑'],
-    Profil:  ['◉', '◉'],
+  // [inaktiv (outline), aktiv (udfyldt)] — rigtige ikoner tegnes ens på
+  // iOS og Android, modsat de gamle teksttegn
+  const ikoner: Record<string, [string, string]> = {
+    Hjem:    ['home-outline', 'home'],
+    Planer:  ['calendar-outline', 'calendar'],
+    Indkøb:  ['cart-outline', 'cart'],
+    Profil:  ['person-outline', 'person'],
   };
+  const ikon = ikoner[name] ?? ['ellipse-outline', 'ellipse'];
   return (
-    <Text style={{ fontSize: 22, color: focused ? Colors.green : Colors.inkSoft }}>
-      {icons[name]?.[focused ? 1 : 0] ?? '·'}
-    </Text>
+    <Ionicons
+      name={(focused ? ikon[1] : ikon[0]) as keyof typeof Ionicons.glyphMap}
+      size={22}
+      color={focused ? Colors.green : Colors.inkSoft}
+    />
   );
 }
 
 function MainTabs() {
   return (
     <Tab.Navigator
+      // Efter onboardingen lander man direkte i Planer, hvor vælgeren åbner
+      // med de anbefalede retter fra aha-skærmen præ-valgt
+      initialRouteName={harForvalgteRetter() ? 'Planer' : 'Hjem'}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} />,
@@ -79,8 +91,27 @@ function MainTabs() {
 function RootNavigator() {
   const { session, loading } = useAuth();
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [profilTjekket, setProfilTjekket] = useState(false);
 
-  if (loading) {
+  // Gate på profil-data, ikke kun in-memory state: en bruger der lukker
+  // appen midt i onboardingen skal se den igen ved næste start.
+  // household_size er altid sat når onboardingen er gennemført.
+  useEffect(() => {
+    if (!session) {
+      setProfilTjekket(false);
+      setShowOnboarding(false);
+      return;
+    }
+    let aktiv = true;
+    supabase.from('profiles').select('household_size').maybeSingle().then(({ data }) => {
+      if (!aktiv) return;
+      if (!data || data.household_size == null) setShowOnboarding(true);
+      setProfilTjekket(true);
+    });
+    return () => { aktiv = false; };
+  }, [session]);
+
+  if (loading || (session && !profilTjekket)) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.paper }}>
         <ActivityIndicator size="large" color={Colors.green} />

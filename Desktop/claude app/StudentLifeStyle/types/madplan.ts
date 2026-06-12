@@ -33,6 +33,8 @@ export type IndkoebsVare = {
   pakkestoerrelse: string;
   pris: number;
   paa_tilbud: boolean;
+  normalpris?: number;     // basisprisen når varen er på tilbud
+  butik?: string | null;   // butikken med tilbuddet
   checked?: boolean;
 };
 
@@ -63,6 +65,7 @@ export type Madplan = {
   spild_kr?: number;
   gemt_vaerdi?: number;
   advarsler?: string[];
+  valgte_opskrifter?: { id: string; navn: string; portioner: number }[];
   // legacy
   total?: number;
 };

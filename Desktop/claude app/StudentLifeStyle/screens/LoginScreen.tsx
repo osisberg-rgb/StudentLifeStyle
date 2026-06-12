@@ -45,9 +45,9 @@ export default function LoginScreen({ onNewUser }: Props) {
           <View style={styles.logoDot} />
         </View>
 
-        <Text style={styles.headline}>Spis godt for{'\n'}små penge</Text>
+        <Text style={styles.headline}>Aftensmad uden{'\n'}hovedbrud</Text>
         <Text style={styles.sub}>
-          Få en madplan ud fra ugens tilbud – og se hvor meget du sparer.
+          Vælg ugens retter, få indkøbslisten med ugens tilbud — og se hvad I sparer.
         </Text>
 
         {/* Fields */}

@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView,
-  Switch, Alert, Modal,
+  Alert, Modal,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { Colors, Radii } from '../constants/theme';
 import ButiksPill from '../components/ButiksPill';
 import Chip from '../components/Chip';
+import BesparelsesHistorikModal from '../components/BesparelsesHistorikModal';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { useSamletBesparelse, formatKr } from '../hooks/useSamletBesparelse';
 
-const ALLE_BUTIKKER = ['Netto', 'Rema 1000', 'Lidl', '365discount', 'Føtex', 'SuperBrugsen', 'Kvikly'];
+const ALLE_BUTIKKER = ['Netto', 'Rema 1000', 'Lidl', '365discount', 'Føtex', 'SuperBrugsen', 'Kvikly', 'Bilka'];
 
 const KOED_VALG: { label: string; ikon: string }[] = [
   { label: 'Alt',      ikon: '🍽️' },
@@ -21,7 +23,6 @@ const KOED_VALG: { label: string; ikon: string }[] = [
 
 export default function ProfilScreen() {
   const { user, signOut } = useAuth();
-  const [notifikationer, setNotifikationer] = useState(true);
   const [valgteButikker, setValgteButikker] = useState(['Netto', 'Rema 1000', 'Lidl']);
   const [butikModalVisible, setButikModalVisible] = useState(false);
   const [budget, setBudget] = useState(350);
@@ -29,22 +30,32 @@ export default function ProfilScreen() {
   const [budgetModalVisible, setBudgetModalVisible] = useState(false);
   const [koed, setKoed] = useState<string[]>(['Alt']);
   const [kostModalVisible, setKostModalVisible] = useState(false);
+  const [personer, setPersoner] = useState(4);
+  const [displayName, setDisplayName] = useState<string | null>(null);
+  const [historikÅben, setHistorikÅben] = useState(false);
+  const { sparet, antalPlaner, uger, klar: besparelseKlar } = useSamletBesparelse();
+  const harPlaner = antalPlaner > 0;
 
-  const navn = user?.email?.split('@')[0] ?? 'Studerende';
+  const navn = displayName ?? user?.email?.split('@')[0] ?? 'Profil';
   const initial = navn[0]?.toUpperCase();
 
   // Hent profil fra DB ved opstart
   useEffect(() => {
-    supabase.from('profiles').select('stores, budget_per_week, diet').maybeSingle().then(({ data }) => {
+    supabase.from('profiles').select('stores, budget_per_week, diet, household_size').maybeSingle().then(({ data }) => {
       if (data) {
         if (data.stores?.length) setValgteButikker(data.stores);
         if (data.budget_per_week) { setBudget(data.budget_per_week); setBudgetDraft(data.budget_per_week); }
+        if (data.household_size) setPersoner(data.household_size);
         if (data.diet?.length) {
           const d = data.diet as string[];
           const koedFundet = d.filter(x => KOED_VALG.some(k => k.label === x));
           setKoed(koedFundet.length > 0 ? koedFundet : ['Alt']);
         }
       }
+    });
+    // Separat kald — display_name-kolonnen må ikke vælte resten af profilen
+    supabase.from('profiles').select('display_name').maybeSingle().then(({ data, error }) => {
+      if (!error && data?.display_name) setDisplayName(data.display_name);
     });
   }, []);
 
@@ -58,6 +69,12 @@ export default function ProfilScreen() {
 
   async function gemKost() {
     await supabase.from('profiles').update({ diet: koed }).eq('id', user!.id);
+  }
+
+  // Gemmes med det samme ved tryk — bruges automatisk som standard i Ny plan
+  async function gemPersoner(n: number) {
+    setPersoner(n);
+    await supabase.from('profiles').update({ household_size: n }).eq('id', user!.id);
   }
 
   function toggleButik(b: string) {
@@ -86,18 +103,33 @@ export default function ProfilScreen() {
             <Text style={styles.avatarText}>{initial}</Text>
           </View>
           <Text style={styles.navn}>{navn}</Text>
-          <Text style={styles.rolle}>Studerende · Aarhus</Text>
+          <Text style={styles.rolle}>
+            {personer} {personer === 1 ? 'person' : 'personer'} i husstanden · {budget} kr/uge
+          </Text>
         </View>
 
-        {/* Statistik */}
+        {/* Statistik — akkumuleret besparelse fra gemte madplaner.
+            Besparelses-kortet åbner historikken når der er planer. */}
         <View style={styles.statRække}>
-          <View style={[styles.statKort, { flex: 1, marginRight: 8 }]}>
-            <Text style={styles.statLabel}>Sparet i alt</Text>
-            <Text style={styles.statVal}>1.247 kr</Text>
-          </View>
+          <TouchableOpacity
+            style={[styles.statKort, { flex: 1, marginRight: 8 }]}
+            onPress={() => harPlaner && setHistorikÅben(true)}
+            activeOpacity={harPlaner ? 0.7 : 1}
+            disabled={!harPlaner}
+          >
+            <Text style={styles.statLabel}>Samlet besparelse</Text>
+            {besparelseKlar && !harPlaner ? (
+              <Text style={styles.statTom}>Ingen besparelse registreret endnu.</Text>
+            ) : (
+              <>
+                <Text style={styles.statVal}>{formatKr(sparet)} kr</Text>
+                <Text style={styles.statLink}>Se historik ›</Text>
+              </>
+            )}
+          </TouchableOpacity>
           <View style={[styles.statKort, { flex: 1 }]}>
             <Text style={styles.statLabel}>Madplaner</Text>
-            <Text style={[styles.statVal, { color: Colors.ink }]}>12</Text>
+            <Text style={[styles.statVal, { color: Colors.ink }]}>{antalPlaner}</Text>
           </View>
         </View>
 
@@ -122,23 +154,32 @@ export default function ProfilScreen() {
             <Text style={styles.værditekst}>{koed.includes('Alt') ? 'Alt kød' : koed.join(', ')} ›</Text>
           </TouchableOpacity>
           <Separator />
-          <Række ikon="🔔" label="Notifikationer">
-            <Switch
-              value={notifikationer}
-              onValueChange={setNotifikationer}
-              trackColor={{ false: Colors.line, true: Colors.greenBright }}
-              thumbColor="#fff"
-            />
+          <Række ikon="👥" label="Antal personer">
+            <View style={styles.stepper}>
+              <TouchableOpacity
+                style={[styles.stepKnap, personer <= 1 && styles.stepKnapDisabled]}
+                onPress={() => gemPersoner(Math.max(1, personer - 1))}
+                disabled={personer <= 1}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+              >
+                <Text style={styles.stepTekst}>−</Text>
+              </TouchableOpacity>
+              <Text style={styles.personerVærdi}>{personer}</Text>
+              <TouchableOpacity
+                style={[styles.stepKnap, personer >= 8 && styles.stepKnapDisabled]}
+                onPress={() => gemPersoner(Math.min(8, personer + 1))}
+                disabled={personer >= 8}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+              >
+                <Text style={styles.stepTekst}>+</Text>
+              </TouchableOpacity>
+            </View>
           </Række>
         </View>
 
         {/* Andet */}
         <Text style={styles.sektionLabel}>ANDET</Text>
         <View style={styles.kort}>
-          <Række ikon="❓" label="Hjælp & support">
-            <Text style={styles.værditekst}>›</Text>
-          </Række>
-          <Separator />
           <TouchableOpacity style={styles.logUdRække} onPress={handleLogUd}>
             <Text style={styles.logUdIcon}>↩</Text>
             <Text style={styles.logUdTekst}>Log ud</Text>
@@ -209,7 +250,7 @@ export default function ProfilScreen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.modalSub}>Vælg de kødtyper du vil have i din madplan. AI'en undgår de andre.</Text>
+          <Text style={styles.modalSub}>Vælg de kødtyper I spiser derhjemme. Madplanen holder sig til dem.</Text>
           <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
             {KOED_VALG.map(k => {
               const aktiv = koed.includes(k.label);
@@ -295,6 +336,13 @@ export default function ProfilScreen() {
           </View>
         </SafeAreaView>
       </Modal>
+
+      <BesparelsesHistorikModal
+        synlig={historikÅben}
+        sparet={sparet}
+        uger={uger}
+        onLuk={() => setHistorikÅben(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -332,6 +380,8 @@ const styles = StyleSheet.create({
   },
   statLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: Colors.inkSoft, marginBottom: 6 },
   statVal: { fontSize: 22, fontFamily: 'BricolageGrotesque_800ExtraBold', color: Colors.green, letterSpacing: -0.4 },
+  statLink: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: Colors.green, marginTop: 4 },
+  statTom: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, lineHeight: 18 },
   sektionLabel: {
     fontSize: 11, fontFamily: 'Inter_700Bold', color: Colors.inkSoft,
     letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8,
@@ -345,6 +395,18 @@ const styles = StyleSheet.create({
   rækkeLabel: { flex: 1, fontSize: 15, fontFamily: 'Inter_400Regular', color: Colors.ink },
   rækkeRet: { flexDirection: 'row', alignItems: 'center' },
   værditekst: { fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.inkSoft },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  stepKnap: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: Colors.canvas, borderWidth: 1, borderColor: Colors.line,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  stepKnapDisabled: { opacity: 0.35 },
+  stepTekst: { fontSize: 15, fontFamily: 'Inter_700Bold', color: Colors.ink },
+  personerVærdi: {
+    fontSize: 15, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.ink,
+    minWidth: 20, textAlign: 'center',
+  },
   logUdRække: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },
   logUdIcon: { fontSize: 18, marginRight: 14, color: Colors.red },
   logUdTekst: { fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.red },

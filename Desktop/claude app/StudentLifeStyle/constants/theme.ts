@@ -40,4 +40,13 @@ export const StoreColors: Record<string, { bg: string; text: string }> = {
   '365discount': { bg: '#E23A2E', text: '#FFFFFF' },
   SuperBrugsen:  { bg: '#00843D', text: '#FFFFFF' },
   Kvikly:        { bg: '#004B87', text: '#FFFFFF' },
+  // Madkategorier
+  'Kød':                { bg: '#C62828', text: '#FFFFFF' },
+  'Fisk':               { bg: '#1565C0', text: '#FFFFFF' },
+  'Mejeri & æg':        { bg: '#F9A825', text: '#fff' },
+  'Pasta, ris & korn':  { bg: '#E65100', text: '#FFFFFF' },
+  'Grøntsager':         { bg: '#2E7D32', text: '#FFFFFF' },
+  'Dåse & konserves':   { bg: '#6A1B9A', text: '#FFFFFF' },
+  'Brød':               { bg: '#5D4037', text: '#FFFFFF' },
+  'Andet':              { bg: '#546E7A', text: '#FFFFFF' },
 };

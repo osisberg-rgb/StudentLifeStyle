@@ -1,39 +1,59 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Colors, Radii } from '../constants/theme';
 import ButiksPill from '../components/ButiksPill';
-import SparSegl from '../components/SparSegl';
 import { supabase } from '../lib/supabase';
 import { IndkoebsButik, IndkoebsVare } from '../types/madplan';
+import { sætValgtUge, hentValgtUge } from '../constants/ugeState';
+
+type Vare = IndkoebsVare & { checked?: boolean };
 
 export default function IndkøbScreen() {
   const [sektioner, setSektioner] = useState<IndkoebsButik[]>([]);
   const [loading, setLoading] = useState(true);
-  const [totalSpar, setTotalSpar] = useState(0);
-  const weekNo = getWeekNumber();
+  // Uge-vælger: følger den uge man står på i Planer (delt state), så
+  // madplan og indkøbsliste altid peger på samme uge
+  const [uge, setUge] = useState(() => hentValgtUge(getWeekNumber()));
+  // Planen som den blev hentet — genbruges ved gem, så hvert checkbox-tryk
+  // ikke koster et ekstra SELECT-rundtrip. Genindlæses ved hvert fokus.
+  const planRef = useRef<any>(null);
 
-  useFocusEffect(useCallback(() => { hentListe(); }, []));
+  useFocusEffect(useCallback(() => {
+    // Følg den delte uge (ændret fra Planer-fanen) — setUge ændrer
+    // dep'en, så effekten kører igen og henter den rigtige liste
+    const deltUge = hentValgtUge(uge);
+    if (deltUge !== uge) {
+      setUge(deltUge);
+      return;
+    }
+    hentListe(uge);
+  }, [uge]));
 
-  async function hentListe() {
+  function skiftUge(retning: number) {
+    const ny = uge + retning;
+    sætValgtUge(ny);
+    setUge(ny);
+  }
+
+  async function hentListe(ugeNr: number) {
     setLoading(true);
     try {
       const { data } = await supabase
         .from('madplaner')
-        .select('plan, total_spar')
-        .eq('uge_nr', weekNo)
+        .select('plan')
+        .eq('uge_nr', ugeNr)
         .maybeSingle();
 
+      planRef.current = data?.plan ?? null;
       if (data?.plan?.indkoebsliste?.length) {
-        // Sørg for at varer har checked-felt
         const liste: IndkoebsButik[] = data.plan.indkoebsliste.map((s: IndkoebsButik) => ({
           ...s,
           varer: s.varer.map(v => ({ ...v, checked: (v as any).checked ?? false })),
         }));
         setSektioner(liste);
-        setTotalSpar(data.total_spar ?? 0);
       } else {
         setSektioner([]);
       }
@@ -42,25 +62,44 @@ export default function IndkøbScreen() {
     }
   }
 
-  async function toggleVare(sI: number, vI: number) {
-    const nyeSektioner = sektioner.map((s, si) =>
+  async function gemListe(nyeSektioner: IndkoebsButik[]) {
+    if (!planRef.current) return;
+    const nyTotal = beregnTotal(nyeSektioner);
+    const nyPlan = { ...planRef.current, indkoebsliste: nyeSektioner, indkoebspris: nyTotal, total: nyTotal };
+    planRef.current = nyPlan;
+    await supabase.from('madplaner')
+      .update({ plan: nyPlan, total_pris: nyTotal })
+      .eq('uge_nr', uge);
+  }
+
+  function toggleHarDet(sI: number, vI: number) {
+    const ny = sektioner.map((s, si) =>
       si !== sI ? s : {
         ...s,
         varer: s.varer.map((v, vi) => vi !== vI ? v : { ...v, checked: !(v as any).checked }),
       }
     );
-    setSektioner(nyeSektioner);
-
-    const { data: row } = await supabase
-      .from('madplaner').select('plan').eq('uge_nr', weekNo).maybeSingle();
-    if (row) {
-      await supabase.from('madplaner')
-        .update({ plan: { ...row.plan, indkoebsliste: nyeSektioner } })
-        .eq('uge_nr', weekNo);
-    }
+    setSektioner(ny);
+    gemListe(ny);
   }
 
-  const total = sektioner.reduce((acc, s) => acc + (s.subtotal ?? 0), 0);
+  function fjernVare(sI: number, vI: number) {
+    const ny = sektioner.map((s, si) =>
+      si !== sI ? s : { ...s, varer: s.varer.filter((_, vi) => vi !== vI) }
+    ).filter(s => s.varer.length > 0);
+    setSektioner(ny);
+    gemListe(ny);
+  }
+
+  // Total = kun varer der IKKE er markeret som "har det allerede"
+  const total = beregnTotal(sektioner);
+  const sparetVedHarDet = sektioner.reduce((acc, s) =>
+    acc + s.varer.reduce((sum, v) => (v as any).checked ? sum + v.pris : sum, 0), 0
+  );
+  // Fremdrift: i butikken er "hvor langt er jeg?" det vigtigste spørgsmål
+  const alleVarerFlad = sektioner.flatMap(s => s.varer);
+  const antalVarer = alleVarerFlad.length;
+  const antalKlaret = alleVarerFlad.filter(v => (v as any).checked).length;
 
   if (loading) {
     return (
@@ -74,15 +113,15 @@ export default function IndkøbScreen() {
     return (
       <SafeAreaView style={styles.root}>
         <View style={styles.header}>
-          <Text style={styles.title}>Indkøbsliste</Text>
-          <Text style={styles.uge}>Uge {weekNo}</Text>
+          <View style={styles.headerRække}>
+            <Text style={styles.title}>Indkøbsliste</Text>
+            <UgeVælger uge={uge} onSkift={skiftUge} />
+          </View>
         </View>
         <View style={styles.tom}>
           <Text style={styles.tomEmoji}>🛒</Text>
-          <Text style={styles.tomTekst}>Din liste er tom</Text>
-          <Text style={styles.tomSub}>
-            Åbn en opskrift under Planer og tryk "Tilføj til indkøbsliste"
-          </Text>
+          <Text style={styles.tomTekst}>Ingen liste for uge {uge}</Text>
+          <Text style={styles.tomSub}>Lav en madplan under Planer — ingredienserne tilføjes automatisk</Text>
         </View>
       </SafeAreaView>
     );
@@ -91,47 +130,92 @@ export default function IndkøbScreen() {
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
-        <Text style={styles.title}>Indkøbsliste</Text>
-        <Text style={styles.uge}>Uge {weekNo}</Text>
+        <View style={styles.headerRække}>
+          <Text style={styles.title}>Indkøbsliste</Text>
+          <UgeVælger uge={uge} onSkift={skiftUge} />
+        </View>
+        <View style={styles.fremdriftRække}>
+          <View style={styles.fremdriftBg}>
+            <View style={[styles.fremdriftFill, { width: `${antalVarer === 0 ? 0 : Math.round((antalKlaret / antalVarer) * 100)}%` }]} />
+          </View>
+          <Text style={styles.fremdriftTekst}>{antalKlaret} af {antalVarer} varer</Text>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {sektioner.map((sektion, si) => (
-          <View key={si} style={styles.sektion}>
-            <View style={styles.sektionHeader}>
-              <ButiksPill name={sektion.butik} />
-              <Text style={styles.subtotal}>{sektion.subtotal} kr</Text>
-            </View>
-            <View style={styles.sektionKort}>
-              {sektion.varer.map((vare: IndkoebsVare & { checked?: boolean }, vi) => (
-                <TouchableOpacity
-                  key={vi}
-                  style={[styles.vareRække, vi < sektion.varer.length - 1 && styles.vareDivider]}
-                  onPress={() => toggleVare(si, vi)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.checkbox, vare.checked && styles.checkboxChecked]}>
-                    {vare.checked && <Text style={styles.checkmark}>✓</Text>}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.vareNavn, vare.checked && styles.vareChecked]}>
-                      {vare.vare}
-                    </Text>
-                    {(vare as any).pakkestoerrelse ? (
-                      <Text style={styles.vareMaengde}>
-                        {(vare as any).antal_pakker ?? 1} × {(vare as any).pakkestoerrelse}
+        {sektioner.map((sektion, si) => {
+          const sektionTotal = sektion.varer.reduce((s, v) => (v as any).checked ? s : s + v.pris, 0);
+          return (
+            <View key={si} style={styles.sektion}>
+              <View style={styles.sektionHeader}>
+                <ButiksPill name={sektion.butik} />
+                <Text style={styles.subtotal}>{sektionTotal} kr</Text>
+              </View>
+              <View style={styles.sektionKort}>
+                {sektion.varer.map((vare: Vare, vi) => (
+                  <View
+                    key={vi}
+                    style={[styles.vareRække, vi < sektion.varer.length - 1 && styles.vareDivider]}
+                  >
+                    {/* Venstre: checkbox "har det allerede" — stort tryk-mål,
+                        listen bruges med én hånd i butikken */}
+                    <TouchableOpacity
+                      onPress={() => toggleHarDet(si, vi)}
+                      style={[styles.checkbox, vare.checked && styles.checkboxChecked]}
+                      hitSlop={{ top: 12, bottom: 12, left: 14, right: 10 }}
+                    >
+                      {vare.checked && <Text style={styles.checkmark}>✓</Text>}
+                    </TouchableOpacity>
+
+                    {/* Midt: navn + mængde */}
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.vareNavn, vare.checked && styles.vareChecked]}>
+                        {vare.vare}
                       </Text>
-                    ) : null}
+                      {vare.pakkestoerrelse ? (
+                        <Text style={styles.vareMaengde}>
+                          {vare.antal_pakker ?? 1} × {vare.pakkestoerrelse}
+                        </Text>
+                      ) : null}
+                      {vare.paa_tilbud && vare.butik && !vare.checked ? (
+                        <View style={styles.tilbudRække}>
+                          <ButiksPill name={vare.butik} />
+                        </View>
+                      ) : null}
+                      {vare.checked && (
+                        <Text style={styles.harDetNote}>Har det allerede</Text>
+                      )}
+                    </View>
+
+                    {/* Højre: pris + fjern-knap */}
+                    <View style={styles.hojre}>
+                      <View style={styles.prisStak}>
+                        {vare.paa_tilbud && vare.normalpris != null && !vare.checked && (
+                          <Text style={styles.normalprisStreg}>{vare.normalpris},-</Text>
+                        )}
+                        <Text style={[
+                          styles.varePris,
+                          vare.paa_tilbud && !vare.checked && styles.varePrisTilbud,
+                          vare.checked && styles.varePrisChecked,
+                        ]}>
+                          {vare.pris},-
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => fjernVare(si, vi)}
+                        style={styles.fjernKnap}
+                        hitSlop={{ top: 10, bottom: 10, left: 6, right: 12 }}
+                      >
+                        <Text style={styles.fjernIkon}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <Text style={[styles.varePris, vare.paa_tilbud && styles.varePrisTilbud]}>
-                    {vare.pris},-
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                ))}
+              </View>
             </View>
-          </View>
-        ))}
-        <View style={{ height: 100 }} />
+          );
+        })}
+        <View style={{ height: 120 }} />
       </ScrollView>
 
       <View style={styles.totalBar}>
@@ -139,9 +223,34 @@ export default function IndkøbScreen() {
           <Text style={styles.totalLabel}>I alt for ugen</Text>
           <Text style={styles.totalBeløb}>{total} kr</Text>
         </View>
-        {totalSpar > 0 && <SparSegl amount={String(totalSpar)} size={72} />}
+        {sparetVedHarDet > 0 && (
+          <View style={styles.sparetBoks}>
+            <Text style={styles.sparetLabel}>Har i forvejen</Text>
+            <Text style={styles.sparetBeløb}>−{sparetVedHarDet} kr</Text>
+          </View>
+        )}
       </View>
     </SafeAreaView>
+  );
+}
+
+function UgeVælger({ uge, onSkift }: { uge: number; onSkift: (retning: number) => void }) {
+  return (
+    <View style={styles.ugeVælger}>
+      <TouchableOpacity onPress={() => onSkift(-1)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 6 }}>
+        <Text style={styles.ugeArrow}>‹</Text>
+      </TouchableOpacity>
+      <Text style={styles.uge}>Uge {uge}</Text>
+      <TouchableOpacity onPress={() => onSkift(1)} hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }}>
+        <Text style={styles.ugeArrow}>›</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function beregnTotal(sektioner: IndkoebsButik[]): number {
+  return sektioner.reduce((acc, s) =>
+    acc + s.varer.reduce((sum, v) => (v as any).checked ? sum : sum + v.pris, 0), 0
   );
 }
 
@@ -154,12 +263,18 @@ function getWeekNumber() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.canvas },
   header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     padding: 20, paddingTop: 12, backgroundColor: Colors.paper,
     borderBottomWidth: 1, borderBottomColor: Colors.line,
   },
+  headerRække: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { fontSize: 22, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.ink, letterSpacing: -0.4 },
-  uge: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.inkSoft },
+  uge: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.inkSoft, minWidth: 52, textAlign: 'center' },
+  ugeVælger: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  ugeArrow: { fontSize: 22, color: Colors.inkSoft, paddingHorizontal: 4 },
+  fremdriftRække: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
+  fremdriftBg: { flex: 1, height: 6, backgroundColor: Colors.line, borderRadius: 3, overflow: 'hidden' },
+  fremdriftFill: { height: '100%', backgroundColor: Colors.greenBright, borderRadius: 3 },
+  fremdriftTekst: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: Colors.inkSoft },
   content: { padding: 20 },
   tom: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   tomEmoji: { fontSize: 56, marginBottom: 16 },
@@ -172,19 +287,33 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card, borderRadius: Radii.card,
     borderWidth: 1, borderColor: Colors.line, overflow: 'hidden',
   },
-  vareRække: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 13 },
+  vareRække: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 13,
+  },
   vareDivider: { borderBottomWidth: 1, borderBottomColor: Colors.line },
   checkbox: {
-    width: 22, height: 22, borderRadius: 11, borderWidth: 1.5,
+    width: 26, height: 26, borderRadius: 13, borderWidth: 1.5,
     borderColor: Colors.line, marginRight: 12, alignItems: 'center', justifyContent: 'center',
   },
-  checkboxChecked: { backgroundColor: Colors.greenBright, borderColor: Colors.greenBright },
+  checkboxChecked: { backgroundColor: Colors.green, borderColor: Colors.green },
   checkmark: { color: '#fff', fontSize: 13, fontFamily: 'Inter_700Bold' },
   vareNavn: { fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.ink },
   vareChecked: { color: Colors.inkSoft, textDecorationLine: 'line-through' },
   vareMaengde: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, marginTop: 2 },
+  tilbudRække: { flexDirection: 'row', marginTop: 4 },
+  harDetNote: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: Colors.green, marginTop: 2 },
+  hojre: { flexDirection: 'row', alignItems: 'center', gap: 14, marginLeft: 8 },
+  prisStak: { alignItems: 'flex-end' },
+  normalprisStreg: { fontSize: 11, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, textDecorationLine: 'line-through' },
   varePris: { fontSize: 14, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.ink },
-  varePrisTilbud: { color: Colors.red },
+  varePrisTilbud: { color: Colors.green },
+  varePrisChecked: { color: Colors.inkSoft, textDecorationLine: 'line-through' },
+  fjernKnap: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: Colors.line, alignItems: 'center', justifyContent: 'center',
+  },
+  fjernIkon: { fontSize: 11, color: Colors.inkSoft, fontFamily: 'Inter_700Bold' },
   totalBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     backgroundColor: Colors.green, padding: 20,
@@ -192,4 +321,7 @@ const styles = StyleSheet.create({
   },
   totalLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: 'rgba(255,255,255,0.7)', marginBottom: 4 },
   totalBeløb: { fontSize: 26, fontFamily: 'BricolageGrotesque_800ExtraBold', color: '#fff', letterSpacing: -0.5 },
+  sparetBoks: { alignItems: 'flex-end' },
+  sparetLabel: { fontSize: 11, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.7)', marginBottom: 2 },
+  sparetBeløb: { fontSize: 18, fontFamily: 'BricolageGrotesque_700Bold', color: '#fff' },
 });

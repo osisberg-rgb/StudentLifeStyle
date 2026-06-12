@@ -3,157 +3,270 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import OpenAI from "https://deno.land/x/openai@v4.52.7/mod.ts";
 import { OPSKRIFTER } from "./opskrifter.ts";
 
+// Basispris-opslag: søgeord (lowercase) → normalpris i kr
+// Bruges til deterministisk besparelses-beregning når en vare er på tilbud
+const BASISPRISER: Array<{ soeg: string[]; pris: number }> = [
+  { soeg: ["havregryn"], pris: 10 },
+  { soeg: ["rugbrød", "rugbroed"], pris: 12 },
+  { soeg: ["toastbrød", "toastbroed"], pris: 12 },
+  { soeg: ["grovboller"], pris: 18 },
+  { soeg: ["knækbrød", "knaekbroed"], pris: 13 },
+  { soeg: ["cornflakes"], pris: 18 },
+  { soeg: ["mysli"], pris: 24 },
+  { soeg: ["hvedemel"], pris: 13 },
+  { soeg: ["rugmel"], pris: 14 },
+  { soeg: ["sukker"], pris: 13 },
+  { soeg: ["rasp"], pris: 13 },
+  { soeg: ["spaghetti"], pris: 10 },
+  { soeg: ["pasta", "pastaskruer", "penne"], pris: 12 },
+  { soeg: ["fuldkornspasta"], pris: 14 },
+  { soeg: ["lasagneplader"], pris: 18 },
+  { soeg: ["parboiled"], pris: 17 },
+  { soeg: ["jasminris", "jasmin ris"], pris: 27 },
+  { soeg: ["basmatiris", "basmati"], pris: 31 },
+  { soeg: ["ris"], pris: 17 },
+  { soeg: ["couscous"], pris: 15 },
+  { soeg: ["bulgur"], pris: 18 },
+  { soeg: ["nudler"], pris: 17 },
+  { soeg: ["kartofler", "kartofler"], pris: 12 },
+  { soeg: ["søde kartofler", "sode kartofler"], pris: 27 },
+  { soeg: ["tortilla"], pris: 17 },
+  { soeg: ["pitabrød", "pitabroed"], pris: 15 },
+  { soeg: ["letmælk", "letmaelk", "skummetmælk", "sødmælk", "sodmaelk", "mælk", "maelk"], pris: 12 },
+  { soeg: ["yoghurt naturel"], pris: 17 },
+  { soeg: ["a38", "skyr"], pris: 26 },
+  { soeg: ["yoghurt"], pris: 17 },
+  { soeg: ["creme fraiche", "cremefine", "madlavningsfløde", "madlavningsfloede"], pris: 12 },
+  { soeg: ["hytteost"], pris: 23 },
+  { soeg: ["smørbar", "smorbar", "lurpak"], pris: 18 },
+  { soeg: ["smør", "smor"], pris: 27 },
+  { soeg: ["revet ost"], pris: 21 },
+  { soeg: ["mozzarella"], pris: 21 },
+  { soeg: ["ost"], pris: 50 },
+  { soeg: ["æg", "aeg", "skrabeæg", "skrabaeaeg", "øko æg"], pris: 28 },
+  { soeg: ["hakket oksekød", "hakket okse", "oksekød", "okse"], pris: 42 },
+  { soeg: ["hakket grisekød", "hakket grise", "hakket dansk grise", "svinekød", "grisekød"], pris: 35 },
+  { soeg: ["hakket kylling"], pris: 35 },
+  { soeg: ["kyllingebryst", "kyllingebrystfilet", "kyllingeinderfilet"], pris: 47 },
+  { soeg: ["kyllingelår", "kyllingeoverlår", "kylling"], pris: 47 },
+  { soeg: ["bacontern", "bacon"], pris: 18 },
+  { soeg: ["skinke"], pris: 18 },
+  { soeg: ["pølser", "medister", "polser"], pris: 26 },
+  { soeg: ["leverpostej"], pris: 14 },
+  { soeg: ["fiskefrikadeller"], pris: 30 },
+  { soeg: ["torskerogn"], pris: 17 },
+  { soeg: ["tun"], pris: 12 },
+  { soeg: ["makrel"], pris: 13 },
+  { soeg: ["sardiner"], pris: 15 },
+  { soeg: ["hakkede tomater", "dåsetomater", "daasetomater"], pris: 8 },
+  { soeg: ["flåede tomater", "flaede tomater"], pris: 8 },
+  { soeg: ["passata"], pris: 14 },
+  { soeg: ["tomatpuré", "tomatpure"], pris: 7 },
+  { soeg: ["kidneybønner", "kidneybonner"], pris: 9 },
+  { soeg: ["sorte bønner", "sorte bonner"], pris: 11 },
+  { soeg: ["kikærter", "kikaerter"], pris: 9 },
+  { soeg: ["linser"], pris: 19 },
+  { soeg: ["baked beans"], pris: 11 },
+  { soeg: ["majs"], pris: 9 },
+  { soeg: ["ærter", "aerter", "gulerødder dåse"], pris: 11 },
+  { soeg: ["champignon"], pris: 11 },
+  { soeg: ["kokosmælk", "kokosmælk"], pris: 14 },
+  { soeg: ["bouillon"], pris: 1 },
+  { soeg: ["pasta sauce", "pastasauce"], pris: 15 },
+  { soeg: ["karrysauce", "karry"], pris: 18 },
+  { soeg: ["ravioli på dåse"], pris: 18 },
+  { soeg: ["gulerødder", "gulerodder"], pris: 11 },
+  { soeg: ["løg", "log"], pris: 3 },
+  { soeg: ["rødløg", "rodlog"], pris: 15 },
+  { soeg: ["hvidløg", "hvidlog"], pris: 8 },
+  { soeg: ["hvidkål", "hvidkal"], pris: 18 },
+  { soeg: ["spidskål", "spidskal"], pris: 18 },
+  { soeg: ["broccoli"], pris: 15 },
+  { soeg: ["blomkål", "blomkal"], pris: 22 },
+  { soeg: ["agurk"], pris: 11 },
+  { soeg: ["tomater på stilk", "cocktailtomater", "tomater"], pris: 22 },
+  { soeg: ["peberfrugt", "snackpebre", "pebre"], pris: 27 },
+  { soeg: ["salat", "iceberg"], pris: 18 },
+  { soeg: ["æbler", "aebler"], pris: 20 },
+  { soeg: ["bananer"], pris: 16 },
+  { soeg: ["appelsiner"], pris: 20 },
+  { soeg: ["frosne ærter", "frosne aerter"], pris: 14 },
+  { soeg: ["frossen broccoli"], pris: 15 },
+  { soeg: ["grøntsagsmix", "grontsagsmix"], pris: 18 },
+  { soeg: ["frossen spinat", "spinat"], pris: 14 },
+  { soeg: ["pommes", "frosne kartofler"], pris: 18 },
+  { soeg: ["frosne bær", "frosne baer"], pris: 26 },
+  { soeg: ["rapsolie", "raps"], pris: 24 },
+  { soeg: ["olivenolie", "olive"], pris: 47 },
+  { soeg: ["mayonnaise"], pris: 18 },
+  { soeg: ["ketchup"], pris: 17 },
+  { soeg: ["sennep"], pris: 13 },
+  { soeg: ["remoulade"], pris: 16 },
+  { soeg: ["peanutbutter", "peanut"], pris: 26 },
+  { soeg: ["marmelade"], pris: 16 },
+  { soeg: ["piskefløde", "piskeflode", "fløde", "flode"], pris: 20 },
+  { soeg: ["squash"], pris: 8 },
+  { soeg: ["aubergine"], pris: 10 },
+];
+
+function slagBasispris(varenavn: string): number | null {
+  const navn = varenavn.toLowerCase();
+  for (const entry of BASISPRISER) {
+    if (entry.soeg.some(s => navn.includes(s))) return entry.pris;
+  }
+  return null;
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Testdata — bruges når ingen PDF er uploadet.
-const TEST_TILBUD = `
-=== REMA 1000 (aktuelle tilbud) ===
+// Basispriser — fast prisniveau for alle ingredienser (ingen tilbudsavis)
+const BASISVARER_TEKST = `
+BASISVARER (estimerede priser):
 
-KYLLING:
-- Dansk kylling 250-800g: 29 kr (max 116 kr/kg)
-- Kyllingebrystfilet eller -lår med BBQ, lårfilet eller hele lår 325-825g: 32,95 kr (max 101,38 kr/kg)
-- Dansk kyllingebrystfilet 280g: 27,95 kr (99,82 kr/kg)
-- Kyllingespyd, kyllingewings eller nuggets 240-750g: 29 kr (max 120,83 kr/kg)
+BRØD & MORGENMAD:
+- Havregryn 1kg: ca. 10 kr
+- Rugbrød 500-1000g: ca. 12 kr
+- Toastbrød 500-600g: ca. 12 kr
+- Grovboller 6 stk: ca. 18 kr
+- Knækbrød 200-250g: ca. 13 kr
+- Cornflakes 500g: ca. 18 kr
+- Mysli 750g: ca. 24 kr
 
-OKSEKØD & KALV:
-- Herregårdsbøffer 360g: 39 kr (108,33 kr/kg)
-- Hakket dansk oksekød med 35% grønt 400g: 29,95 kr (74,88 kr/kg)
-- Hakket oksekød 4-7% 350g: 44,95 kr (128,43 kr/kg)
-- Hakket dansk oksekød 15-18% 400g: 37,95 kr (94,88 kr/kg)
+MEL & BAGNING:
+- Hvedemel 1kg: ca. 13 kr
+- Rugmel 1kg: ca. 14 kr
+- Sukker 1kg: ca. 13 kr
+- Rasp 500g: ca. 13 kr
 
-GRIS:
-- Ovnklar flæskesteg pr. ½ kg: 19,95 kr (39,90 kr/kg)
-- Hakket grise- og kalvekød, stegeflæsk eller koteletter 400-500g: 29,95 kr (max 74,88 kr/kg)
-- Hakket dansk grisekød 8-12% eller medister 500g: 24,95 kr (49,90 kr/kg)
-- Hakket dansk grisekød 8-12%, koteletter eller medister 400-500g: 20 kr (max 50 kr/kg)
-- Bacon i skiver eller brunchpølser 300-350g: 22 kr (max 73,33 kr/kg)
-- Frilandsgris pulled pork 800-1100g: 69 kr (max 86,25 kr/kg)
-- Leverpostej eller krydderpaté 200-250g: 12 kr (max 60 kr/kg)
+PASTA, RIS & KORN:
+- Pasta spaghetti 500g: ca. 10 kr
+- Pasta penne/skruer 500g: ca. 12 kr
+- Fuldkornspasta 500g: ca. 14 kr
+- Ris parboiled 1kg: ca. 17 kr
+- Jasminris 1kg: ca. 27 kr
+- Basmatiris 1kg: ca. 31 kr
+- Couscous 500g: ca. 15 kr
+- Bulgur 500g: ca. 18 kr
+- Nudler 500g: ca. 17 kr
+- Lasagneplader 500g: ca. 18 kr
 
-FISK & SKALDYR:
-- Laksefileter 225g: 40 kr (177,78 kr/kg)
-- Laksefilet 600g: 99 kr (165 kr/kg)
-- Rødspættefileter 300g: 25 kr (83,33 kr/kg)
-- Indbagt laks 500g: 39 kr (78 kr/kg)
-- Fiskefars 400g: 30 kr (75 kr/kg)
-- Grønlandske rejer eller Fish & Crisp 200-480g: 25 kr (max 125 kr/kg)
-- Bornholms fiskekonserves 120-260g: 14 kr (max 116,67 kr/kg)
+KARTOFLER & BRØD:
+- Kartofler 1kg: ca. 12 kr
+- Søde kartofler 1kg: ca. 27 kr
+- Tortillawraps 6-8 stk: ca. 17 kr
+- Pitabrød 4-6 stk: ca. 15 kr
 
-FÆRDIGRETTER:
-- Frikadeller, gyros eller karbonader 300-480g: 25 kr (max 83,33 kr/kg)
-- Jensens spareribs 1200g: 79 kr (65,83 kr/kg)
+MEJERI:
+- Mælk/letmælk 1L: ca. 12 kr
+- Yoghurt naturel 1L: ca. 17 kr
+- A38/skyr 1kg: ca. 26 kr
+- Yoghurt med smag 1L: ca. 17 kr
+- Creme fraiche 250g: ca. 12 kr
+- Hytteost 400g: ca. 23 kr
+- Smørbart blandingsprodukt 200g: ca. 18 kr
+- Smør 200g: ca. 27 kr
+- Revet ost 150-200g: ca. 21 kr
+- Ost i blok/skiver 400-500g: ca. 50 kr
+- Æg 10 stk: ca. 28 kr
 
-MEJERI & ÆG:
-- Yoghurt 1000g: 11,95 kr
-- Hytteost 1,5% 250g: 12 kr (48 kr/kg)
-- Mozzarella 150-200g: 10 kr (max 66,67 kr/kg)
-- Creme fraiche 18% eller madlavningsfløde 8% 250ml/g: 10 kr
-- Letmælk eller sødmælk 1L: 14 kr
-- Piskefløde økologisk ½L: 20 kr
-- Cremefine 250ml: 9 kr
-- Økologiske æg M/L 10 stk: 30 kr (3 kr/stk)
+KØDPÅLÆG & PÅLÆG:
+- Bacontern 150-200g: ca. 18 kr
+- Skinke i strimler 150-200g: ca. 18 kr
+- Pølser 300-500g: ca. 26 kr
+- Leverpostej 200-500g: ca. 14 kr
 
-FRUGT & GRØNT:
-- Kartofler 500g: 12 kr (24 kr/kg)
-- Tomater på stilk 500g: 10 kr (20 kr/kg)
-- Squash økologisk stk: 6 kr
-- Spinat økologisk 75g: 8 kr
-- Røde stenfri druer 500g: 15 kr (30 kr/kg)
-- Vandmelon stk: 20 kr
-- Donutferskner 450g: 12 kr
+FISK PÅ DÅSE:
+- Tun i dåse 1 dåse: ca. 12 kr
+- Makrel i tomat 125g: ca. 13 kr
+- Sardiner 100-125g: ca. 15 kr
+- Fiskefrikadeller 300-500g: ca. 30 kr
+- Torskerogn 200g: ca. 17 kr
 
-PASTA, BRØD & KOLONIAL:
-- Pastaskruer 500g: 5,95 kr (11,90 kr/kg)
-- Spaghetti 1kg: 8,95 kr (8,95 kr/kg)
-- Schulstad brød 470-1080g: 15 kr
+DÅSEVARER & KOLONIAL:
+- Hakkede tomater 400g: ca. 8 kr
+- Flåede tomater 400g: ca. 8 kr
+- Passata 500g: ca. 14 kr
+- Tomatpuré 140g: ca. 7 kr
+- Kidneybønner 400g: ca. 9 kr
+- Sorte bønner 400g: ca. 11 kr
+- Kikærter 400g: ca. 9 kr
+- Linser tørrede 500g: ca. 18 kr
+- Røde linser 500g: ca. 21 kr
+- Baked beans 400g: ca. 11 kr
+- Majs på dåse 300-340g: ca. 9 kr
+- Ærter/gulerødder dåse 400g: ca. 11 kr
+- Champignon på glas/dåse 200-300g: ca. 11 kr
+- Kokosmælk 400ml: ca. 14 kr
+- Bouillonterninger 10-12 stk: ca. 13 kr (ca. 1,30 kr/stk)
+- Pasta sauce 500g: ca. 15 kr
+- Karrysauce på glas 400-500g: ca. 18 kr
+- Ravioli/pasta på dåse 400-800g: ca. 18 kr
 
-BASISVARER (estimerede priser, ikke tilbud):
-- Havregryn 1kg: ca. 15 kr
-- Ris 1kg: ca. 15 kr
-- Rugbrød 1kg: ca. 22 kr
-- Rapsolie 1L: ca. 20 kr
-- Løg 1 stk: ca. 2 kr
-- Dåsetomater hakkede 400g: ca. 6 kr
-- Bouillonterning: ca. 2 kr
+FRISKE GRØNTSAGER:
+- Gulerødder 1kg: ca. 11 kr
+- Løg 1kg: ca. 14 kr
+- Rødløg 500g-1kg: ca. 15 kr
+- Hvidløg 1-3 stk: ca. 8 kr
+- Hvidkål 1 stk: ca. 18 kr
+- Spidskål 1 stk: ca. 18 kr
+- Broccoli 1 stk: ca. 15 kr
+- Blomkål 1 stk: ca. 22 kr
+- Agurk 1 stk: ca. 11 kr
+- Tomater 500g: ca. 22 kr
+- Peberfrugt 3 stk: ca. 27 kr
+- Salatmix 1 pose: ca. 18 kr
+- Champignon frisk 250g: ca. 14 kr
+
+FRUGT:
+- Æbler 1kg: ca. 20 kr
+- Bananer 1kg: ca. 16 kr
+- Appelsiner 1kg: ca. 20 kr
+
+FROST:
+- Frosne ærter 400-600g: ca. 14 kr
+- Frossen broccoli 400-600g: ca. 15 kr
+- Frossen grøntsagsmix 500-1000g: ca. 18 kr
+- Frossen spinat 400-600g: ca. 14 kr
+- Pommes/frosne kartofler 750g-1kg: ca. 18 kr
+- Frosne bær 300-500g: ca. 26 kr
+
+OLIE, KRYDDERIER & TILBEHØR:
+- Rapsolie 1L: ca. 24 kr
+- Olivenolie 500ml: ca. 47 kr
+- Mayonnaise 400g: ca. 18 kr
+- Ketchup 500-1000g: ca. 17 kr
+- Sennep 400g: ca. 13 kr
+- Remoulade 400g: ca. 16 kr
+- Peanutbutter 350g: ca. 26 kr
+- Marmelade 400g: ca. 16 kr
 - Salt, peber, krydderier: estimeret
-
-=== NETTO (aktuelle tilbud) ===
-
-KYLLING:
-- Kyllingemarked 280-600g: 39 kr (max 139,29 kr/kg)
-- Hakket kylling 7-10% 400g: 25 kr (62,50 kr/kg)
-- Kyllingefilet, -inderfilet eller -lårfilet 900-1000g: 69 kr (max 76,67 kr/kg)
-- Kyllingemarked 300-750g: 25 kr (max 83,33 kr/kg)
-
-OKSEKØD & KALV:
-- Hakket oksekød 8-12% 400g: 39,95 kr (99,88 kr/kg)
-- Hakket okse- og grisekød 8-12% 650g: 49 kr (75,38 kr/kg)
-
-GRIS:
-- Mørbrad af dansk gris 1650-2300g: 99 kr (max 60 kr/kg)
-- Ribbenssteg uden ben pr. ½ kg: 24,95 kr (49,90 kr/kg)
-- Hakket grisekød 8-12% 500g: 24,95 kr (49,90 kr/kg)
-- Dansk flæsk i skiver 300g: 20 kr (66,67 kr/kg)
-- Pølsemesteren pølser 400-500g: 25 kr (max 62,50 kr/kg)
-- Tulip BBQ pulled pork eller spareribs 500g: 37 kr (74 kr/kg)
-
-FISK & SKALDYR:
-- Fiskefileter 400g: 35 kr (87,50 kr/kg)
-
-MEJERI & ÆG:
-- Yoghurt 1L: 12 kr
-- Skrabeæg 6 stk: 15 kr (2,50 kr/stk)
-- Græsk yoghurt 400g: 16 kr (40 kr/kg)
-- Lurpak smør eller smørbar 200g: 15 kr (75 kr/kg)
-
-FRUGT & GRØNT:
-- Nye kartofler 1kg: 15 kr (15 kr/kg)
-- Aubergine stk: 5 kr
-- Cocktailtomater 500g: 18 kr (36 kr/kg)
-- Røde snackpebre 500g: 15 kr (30 kr/kg)
-- Dansk icebergsalat stk: 10 kr
-- Majskolbe stk: 8 kr
-
-PASTA, BRØD & KOLONIAL:
-- Fuldkornspasta 500g: 9 kr (18 kr/kg)
-- Rugbrød 600g: 15 kr (25 kr/kg)
-- Brød 470-750g: 15 kr (max 31,91 kr/kg)
-- Jasmin ris 1kg: 20 kr (20 kr/kg)
 `;
 
-const SYSTEM_PROMPT = `Du er en madplanlægger der laver ugeplaner ud fra en fast opskriftsbog og aktuelle tilbud.
+const SYSTEM_PROMPT = `Du er en madplanlægger der laver ugeplaner ud fra en fast opskriftsbog og basispriser.
 
 == DIN OPGAVE ==
-Du får en liste med OPSKRIFTER og en liste med TILBUD. Du skal:
-1. For hver opskrift: find de billigste matchende tilbudsvarer til ingredienserne
-2. Beregn den præcise pris pr. portion baseret på pakkepris (ikke gram-pris)
-3. Vælg de bedste opskrifter til 7 dages aftensmad inden for budget og kostpræferencer
+Du får en liste med OPSKRIFTER og en liste med BASISPRISER. Du skal:
+1. For hver opskrift: brug basispriserne til at beregne pris pr. portion
+2. Beregn pris pr. portion baseret på pakkepris (ikke gram-pris)
+3. Fordel de valgte opskrifter på 7 dages aftensmad
 4. Brug rester fra aftensmad som frokost næste dag
 5. Tilføj en billig, gentagelig morgenmad
 
-== PRISBEREGNING (vigtigst) ==
-- Brug ALTID pakkepris — aldrig gram-beregning
-- Ingrediens "500 g hakket kød" → find billigste matchende tilbudsvare per kg, noter pakkeprisen
-- Hvis "vaelgBilligstPerKg: true": sammenlign kr/kg på tværs af matchende varer, vælg billigst
+== PRISBEREGNING ==
+- Brug ALTID pakkepris fra basisprislisten — aldrig gram-beregning
 - pris_pr_portion = sum(pakkepris for alle ikke-estimerede ingredienser) / portioner
-- Estimerede basisvarer (salt, olie, krydderier) tæller ikke med i prisen
-
-== MATCHING ==
-- Brug søgeordene i opskriften til at finde den bedste tilbudsvare
-- Vær fleksibel: "hakket kød" matcher "hakket grisekød", "hakket grise- og kalvekød" osv.
-- Kan en ingrediens ikke matches mod tilbud, brug en estimeret standardpris
-
-== BUTIKKER — ABSOLUT REGEL ==
-Brugeren handler KUN i disse butikker: se "butikker" i bruger-beskeden.
-- Brug ALDRIG varer fra andre butikker — uanset om de er billigere.
-- Hvis en ingrediens ikke findes i de valgte butikkers tilbud, brug en estimeret basisvare (estimeret: true).
-- Sæt butik-feltet til null for estimerede varer — aldrig en butik brugeren ikke har valgt.
+- Estimerede basisvarer (salt, olie, krydderier med estimereretPris: 0) tæller ikke med
+- Sæt paa_tilbud: false for alle varer (ingen tilbudsavis)
+- Sæt butik: null for alle ingredienser
 
 == ØVRIGE REGLER ==
-- 7 dage: Mandag-Søndag med morgenmad, frokost og aftensmad
+- Du SKAL generere ALLE 7 dage: Mandag, Tirsdag, Onsdag, Torsdag, Fredag, Lørdag, Søndag
+- Hver dag har morgenmad, frokost og aftensmad — ingen dage må mangle
+- Gennemse dit svar inden du returnerer: tæl dagene, der skal være præcis 7
+- Genrug de valgte opskrifter på tværs af dagene — der er færre opskrifter end dage
 - Rester fra aftensmad -> næste dags frokost (pris_pr_portion: 0, ingen ingredienser)
 - Morgenmad: simpel og billig (havregryn, æg, rugbrød) - må gentages
 - Respektér kostpræferencer - udeluk opskrifter der ikke passer
@@ -177,11 +290,10 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const {
       action,
-      tilbudsaviser = [],
       budget = 350,
       personer = 1,
       kost = ["Alt"],
-      stores = ["Rema 1000"],
+      opskriftIds = [] as string[],
     } = body;
 
     if (action !== "generate_meal_plan") {
@@ -190,86 +302,17 @@ Deno.serve(async (req) => {
 
     const ugeNr = getWeekNumber();
 
-    // --- 1. Download PDFer fra storage og upload til OpenAI Files API ---
-    const openaiFileIds: string[] = [];
-
-    for (const filnavn of tilbudsaviser.slice(0, 5)) {
-      try {
-        const { data: blob, error } = await supabase.storage
-          .from("tilbudsaviser")
-          .download(filnavn);
-        if (error || !blob) continue;
-
-        const formData = new FormData();
-        formData.append("purpose", "assistants");
-        formData.append("file", new File([blob], filnavn, { type: "application/pdf" }));
-
-        const uploadRes = await fetch("https://api.openai.com/v1/files", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${Deno.env.get("OPENAI_API_KEY")}` },
-          body: formData,
-        });
-
-        if (!uploadRes.ok) continue;
-        const uploadData = await uploadRes.json();
-        if (uploadData.id) openaiFileIds.push(uploadData.id);
-      } catch (_) {}
-    }
-
-    // --- 2. Udtræk tilbud fra PDFer ---
-    let tilbudTekst = TEST_TILBUD;
-
-    if (openaiFileIds.length > 0) {
-      try {
-        const udtrækSvar = await openai.chat.completions.create({
-          model: "gpt-4o",
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: `Analyser disse tilbudsaviser og returner ALLE madvarer på tilbud fra disse butikker: ${stores.join(", ")}.
-Returnér som struktureret tekst (IKKE JSON) i dette format:
-=== BUTIKSNAVN ===
-KATEGORI:
-- Varenavn, pakkestørrelse -> pris kr (kr/kg hvis relevant) [normalpris X kr]
-
-Regler:
-- Kun faktiske priser fra avisen
-- Inkludér pakkestørrelse og beregn kr/kg for kød og fisk
-- Kun madvarer`,
-                },
-                ...openaiFileIds.map((fileId) => ({
-                  type: "file" as const,
-                  file: { file_id: fileId },
-                })),
-              ],
-            },
-          ],
-          max_tokens: 4000,
-        } as any);
-
-        tilbudTekst = udtrækSvar.choices[0].message.content ?? TEST_TILBUD;
-      } catch (e: any) {
-        console.error("PDF-udtræk fejlede:", e.message);
-      }
-
-      for (const fileId of openaiFileIds) {
-        await fetch(`https://api.openai.com/v1/files/${fileId}`, {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${Deno.env.get("OPENAI_API_KEY")}` },
-        }).catch(() => {});
-      }
-    }
+    // Brug kun basispriser — ingen PDF-tilbudsavis
+    const tilbudTekst = BASISVARER_TEKST;
 
     // --- 3. Filtrer opskrifter efter kødpræference og byg prompt ---
     const valgteKoed = kost.filter((k: string) => ["Kylling", "Oksekød", "Svinekød"].includes(k));
     const brugerVilHaveAlt = kost.includes("Alt") || valgteKoed.length === 0;
 
-    const filtreretOpskrifter = OPSKRIFTER.filter(o =>
-      brugerVilHaveAlt || valgteKoed.includes(o.koed) || o.koed === "Alt"
-    );
+    const filtreretOpskrifter = OPSKRIFTER.filter(o => {
+      if (opskriftIds.length > 0) return opskriftIds.includes(o.id);
+      return brugerVilHaveAlt || valgteKoed.includes(o.koed) || o.koed === "Alt";
+    });
 
     const opskrifterTekst = filtreretOpskrifter.map(o => {
       const ing = o.ingredienser.map(i =>
@@ -280,26 +323,21 @@ Regler:
       return `${o.navn} (${o.portioner} portioner) [id: ${o.id}]\n${ing}`;
     }).join("\n\n");
 
-    // --- 4. Filtrer tilbudstekst til kun valgte butikker ---
-    const filtreretTilbudTekst = filtrerTilbudTilButikker(tilbudTekst, stores);
-
-    // --- 5. Generer madplan ---
+    // --- 4. Generer madplan ---
     const userMessage = `BRUGER:
 - budget_pr_uge: ${budget} kr
 - antal_personer: ${personer}
 - kost: ${buildKostInstruktion(kost)}
-- butikker: ${JSON.stringify(stores)}
 - uge: ${ugeNr}
-
+${opskriftIds.length > 0 ? `- VALGTE RETTER: Brugeren har selv valgt præcis disse ${filtreretOpskrifter.length} retter. Brug KUN dem — ingen andre.\n` : ''}
 OPSKRIFTSBOG (brug KUN disse til aftensmad):
 ${opskrifterTekst}
 
-TILBUD FRA TILBUDSAVISER (KUN fra dine valgte butikker):
-${filtreretTilbudTekst}
+BASISPRISER (brug disse til alle ingredienser):
+${tilbudTekst}
 
-Lav en madplan for 7 dage. For hver aftensmad: match ingredienserne mod tilbuddene,
-beregn pris pr. portion korrekt (pakkepris / portioner), og vælg den billigste opskrift
-der passer til kostpræferencerne.
+Lav en madplan for 7 dage. Beregn pris pr. portion ud fra basispriser (pakkepris / portioner).
+Alle varer er estimerede basisvarer — sæt paa_tilbud: false og butik: null for alle.
 
 Returnér JSON i præcis dette format:
 {
@@ -372,51 +410,47 @@ Returnér JSON i præcis dette format:
 
     const madplanJson = JSON.parse(madplanSvar.choices[0].message.content ?? "{}");
 
-    // --- 5. Beregn totaler deterministisk fra indkoebsliste ---
+    // Gem de valgte opskrifter deterministisk i planen — uafhængigt af hvad AI returnerer
+    madplanJson.valgte_opskrifter = filtreretOpskrifter.map(o => ({
+      id: o.id,
+      navn: o.navn,
+      portioner: o.portioner,
+    }));
+
+    // --- 5. Beregn totaler og besparelse deterministisk ---
     let beregnetTotal = 0;
     let beregnetBesparelse = 0;
 
     for (const butik of madplanJson.indkoebsliste ?? []) {
       let butikSubtotal = 0;
       for (const vare of butik.varer ?? []) {
-        butikSubtotal += vare.pris ?? 0;
-        if (vare.paa_tilbud && vare.normalpris) {
-          beregnetBesparelse += (vare.normalpris - vare.pris);
+        const tilbudspris = vare.pris ?? 0;
+        butikSubtotal += tilbudspris;
+
+        if (vare.paa_tilbud) {
+          const basispris = slagBasispris(vare.vare);
+          if (basispris !== null && basispris > tilbudspris) {
+            const spart = (basispris - tilbudspris) * (vare.antal_pakker ?? 1);
+            vare.normalpris = basispris;
+            vare.spart = Math.round(spart * 100) / 100;
+            beregnetBesparelse += spart;
+          }
         }
       }
-      // Sæt subtotal deterministisk så indkøbsliste og forside altid stemmer overens
       butik.subtotal = Math.round(butikSubtotal * 100) / 100;
       beregnetTotal += butikSubtotal;
     }
 
     madplanJson.indkoebspris = Math.round(beregnetTotal);
     madplanJson.total = madplanJson.indkoebspris;
-    madplanJson.besparelse = beregnetBesparelse > 0 ? Math.round(beregnetBesparelse) : (madplanJson.besparelse ?? 0);
+    madplanJson.besparelse = Math.round(beregnetBesparelse);
     madplanJson.spild_kr = Math.round(madplanJson.spild_kr ?? 0);
     madplanJson.gemt_vaerdi = Math.round(madplanJson.gemt_vaerdi ?? 0);
 
-    // --- 6. Gem i databasen ---
-    const authHeader = req.headers.get("Authorization");
-    if (authHeader) {
-      const userSupabase = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_ANON_KEY")!,
-        { global: { headers: { Authorization: authHeader } } }
-      );
-
-      const { data: { user } } = await userSupabase.auth.getUser();
-      if (user) {
-        await supabase.from("profiles").upsert({ id: user.id }, { onConflict: "id", ignoreDuplicates: true });
-        await supabase.from("madplaner").upsert({
-          user_id: user.id,
-          uge_nr: ugeNr,
-          plan: madplanJson,
-          total_pris: madplanJson.indkoebspris,
-          total_spar: madplanJson.besparelse,
-        }, { onConflict: "user_id,uge_nr" });
-      }
-    }
-
+    // Gemmes IKKE her. Appen ejer alle gemte planer og upserter selv den
+    // deterministiske version (kategori-inddelt indkøbsliste) på den VALGTE
+    // uge efter svaret. Edge-funktionens eget gem skrev altid til indeværende
+    // uge og overskrev appens liste, når man planlagde en fremtidig uge.
     return json(madplanJson);
   } catch (e: any) {
     console.error(e);
