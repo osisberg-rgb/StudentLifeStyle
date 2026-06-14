@@ -9,6 +9,7 @@ import { hentOpskriftPriser } from '../constants/opskriftPriser';
 import { KATEGORIER, KategoriId } from '../constants/kategorier';
 import { findAnbefaledeRetter, måltiderPrRet, MAKS_RETTER, UGE_MAAL } from '../constants/anbefaling';
 import { hentBillede } from '../constants/opskriftBilleder';
+import { tælTilbudsMatch } from '../constants/tilbudsMatch';
 
 const KOED_EMOJI: Record<string, string> = {
   Kylling: '🐔',
@@ -60,7 +61,9 @@ export default function VælgRetterModal({ synlig, kost, budget, butikker, perso
     (!kunHurtige || ((o as any).minutter ?? 99) <= 30)
   );
   const viste = kategori === 'billig'
-    ? [...filtrerede].sort((a, b) => (retPriser.get(a.id)?.pris ?? 0) - (retPriser.get(b.id)?.pris ?? 0))
+    ? [...filtrerede].sort((a, b) =>
+        tælTilbudsMatch(b.id, butikker).antal - tælTilbudsMatch(a.id, butikker).antal
+      )
     : filtrerede;
 
   // Anbefalingen genberegnes kun når modalen er åben og input ændrer sig
@@ -125,7 +128,6 @@ export default function VælgRetterModal({ synlig, kost, budget, butikker, perso
   // Valget er altid `valgte` — anbefalingen seeder det bare, så man frit
   // kan fjerne/udskifte enkelte retter bagefter
   const aktivValgte = valgte;
-  const samletPris = aktivValgte.reduce((sum, id) => sum + (retPriser.get(id)?.pris ?? 0), 0);
   // Hvor mange aftensmåltider dækker valget? (rester tæller med)
   const dækkedeMåltider = aktivValgte.reduce((sum, id) => {
     const info = retPriser.get(id);
@@ -135,6 +137,9 @@ export default function VælgRetterModal({ synlig, kost, budget, butikker, perso
     const info = retPriser.get(id);
     return sum + (info ? måltiderPrRet(info.portioner, personer) : 1);
   }, 0);
+  const anbefaletTilbud = anbefaletIds.reduce((sum, id) =>
+    sum + tælTilbudsMatch(id, butikker).antal, 0
+  );
 
   return (
     <Modal visible={synlig} animationType="slide" presentationStyle="pageSheet">
@@ -223,9 +228,7 @@ export default function VælgRetterModal({ synlig, kost, budget, butikker, perso
                         : 'Anbefalet ud fra dit budget'}
                     </Text>
                     <Text style={[styles.anbefaletSub, anbefaletValgt && styles.anbefaletSubValgt]}>
-                      {anbefaletIds.length} retter · {anbefaletMåltider} måltider · ~{Math.round(
-                        anbefaletIds.reduce((s, id) => s + (retPriser.get(id)?.pris ?? 0), 0)
-                      )} kr
+                      {anbefaletIds.length} retter · {anbefaletMåltider} måltider{anbefaletTilbud > 0 ? ` · 🏷 ${anbefaletTilbud} tilbuds-varer` : ''}
                     </Text>
                   </View>
                 </View>
@@ -265,9 +268,10 @@ export default function VælgRetterModal({ synlig, kost, budget, butikker, perso
               const aftener = info ? måltiderPrRet(info.portioner, personer) : 1;
 
               const billede = hentBillede(o.id);
-              const tilbudBadge = info?.paaTilbud ? (
+              const tilbudsMatch = tælTilbudsMatch(o.id, butikker);
+              const tilbudBadge = tilbudsMatch.antal > 0 ? (
                 <View style={styles.tilbudBadge}>
-                  <Text style={styles.tilbudBadgeTekst}>TILBUD −{info.besparelse} kr</Text>
+                  <Text style={styles.tilbudBadgeTekst}>🏷 {tilbudsMatch.antal}</Text>
                 </View>
               ) : null;
               const tidBadge = (o as any).minutter ? (
@@ -315,23 +319,16 @@ export default function VælgRetterModal({ synlig, kost, budget, butikker, perso
                       {o.navn}
                     </Text>
                     <View style={styles.kortMeta}>
-                      <Text style={styles.kortPortioner}>
+                      <Text style={styles.kortPortioner} numberOfLines={1}>
                         👤 {info ? info.portioner : o.portioner} port.{aftener > 1
                           ? ` · ${aftener} aftener`
                           : info && info.gangeOpskrift > 1 ? ` · ${info.gangeOpskrift}×` : ''}
                       </Text>
-                      <View style={styles.kortPrisRække}>
-                        {info?.paaTilbud && (
-                          <Text style={styles.kortNormalpris}>{info.normalpris}</Text>
-                        )}
-                        <Text style={[
-                          styles.kortPris,
-                          info?.paaTilbud && styles.kortPrisTilbud,
-                          erValgt && styles.kortPrisValgt,
-                        ]}>
-                          {info?.pris ?? 0} kr
+                      {tilbudsMatch.butikker.length > 0 && (
+                        <Text style={styles.kortButik} numberOfLines={1}>
+                          {tilbudsMatch.butikker[0]}
                         </Text>
-                      </View>
+                      )}
                     </View>
                   </View>
                 </View>
@@ -347,7 +344,6 @@ export default function VælgRetterModal({ synlig, kost, budget, butikker, perso
               <Text style={styles.totalLabel}>
                 {aktivValgte.length} retter · dækker {dækkedeMåltider} aftensmåltider
               </Text>
-              <Text style={styles.totalPris}>~{Math.round(samletPris)} kr</Text>
             </View>
           )}
           <TouchableOpacity
@@ -482,10 +478,10 @@ const styles = StyleSheet.create({
   kortEmoji: { fontSize: 48 },
   tilbudBadge: {
     position: 'absolute', top: 8, left: 8,
-    backgroundColor: Colors.red, borderRadius: 4,
-    paddingHorizontal: 6, paddingVertical: 3,
+    backgroundColor: Colors.red, borderRadius: 6,
+    paddingHorizontal: 7, paddingVertical: 3,
   },
-  tilbudBadgeTekst: { color: '#fff', fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 0.3 },
+  tilbudBadgeTekst: { color: '#fff', fontSize: 11, fontFamily: 'Inter_700Bold' },
   tilføjKnap: {
     position: 'absolute', top: 8, right: 8,
     width: 30, height: 30, borderRadius: 15,
@@ -503,16 +499,9 @@ const styles = StyleSheet.create({
     marginBottom: 6, lineHeight: 18,
   },
   kortNavnValgt: { color: Colors.green },
-  kortMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  kortPortioner: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.inkSoft },
-  kortPrisRække: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  kortNormalpris: {
-    fontSize: 11, fontFamily: 'Inter_400Regular', color: Colors.inkSoft,
-    textDecorationLine: 'line-through',
-  },
-  kortPris: { fontSize: 14, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.ink },
-  kortPrisTilbud: { color: Colors.red },
-  kortPrisValgt: { color: Colors.green },
+  kortMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 4 },
+  kortPortioner: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, flex: 1 },
+  kortButik: { fontSize: 11, fontFamily: 'Inter_600SemiBold', color: Colors.inkSoft },
 
   bund: {
     padding: 20, paddingBottom: 32,
@@ -523,7 +512,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
   totalLabel: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.inkSoft },
-  totalPris: { fontSize: 18, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.ink },
   genererKnap: {
     backgroundColor: Colors.green, borderRadius: Radii.btn,
     padding: 16, alignItems: 'center',
