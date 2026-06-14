@@ -6,13 +6,14 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import {
-  BesparelsesRække, BesparelsesUge, beregnSamletBesparelse, byggUgeSerie,
+  BesparelsesRække, BesparelsesUge, beregnSamletBesparelse, beregnSamletTilbud, byggUgeSerie,
 } from '../constants/besparelse';
 
 export { formatKr } from '../constants/besparelse';
 
 type Resultat = {
   sparet: number;
+  samletTilbud: number;
   antalPlaner: number;
   uger: BesparelsesUge[];
   klar: boolean;
@@ -20,6 +21,7 @@ type Resultat = {
 
 export function useSamletBesparelse(): Resultat {
   const [sparet, setSparet] = useState(0);
+  const [samletTilbud, setSamletTilbud] = useState(0);
   const [antalPlaner, setAntalPlaner] = useState(0);
   const [uger, setUger] = useState<BesparelsesUge[]>([]);
   const [klar, setKlar] = useState(false);
@@ -37,6 +39,7 @@ export function useSamletBesparelse(): Resultat {
           } else {
             const rækker = (data ?? []) as BesparelsesRække[];
             setSparet(beregnSamletBesparelse(rækker));
+            setSamletTilbud(beregnSamletTilbud(rækker));
             setAntalPlaner(rækker.length);
             setUger(byggUgeSerie(rækker));
           }
@@ -46,5 +49,5 @@ export function useSamletBesparelse(): Resultat {
     }, [])
   );
 
-  return { sparet, antalPlaner, uger, klar };
+  return { sparet, samletTilbud, antalPlaner, uger, klar };
 }

@@ -14,14 +14,14 @@ type Props = {
 export default function BesparelseGraf({ uger, maks = 12, højde = 56 }: Props) {
   const data = uger.slice(-maks);
   if (data.length === 0) return null;
-  const maxSpar = Math.max(1, ...data.map(u => u.spar));
+  const maxVal = Math.max(1, ...data.map(u => u.tilbud));
 
   return (
     <View>
       <View style={[styles.række, { height: højde }]}>
         {data.map((u, i) => {
-          // Mindst 3 px, så uger uden tilbuds-besparelse stadig ses som en stub
-          const h = Math.max(3, Math.round((u.spar / maxSpar) * højde));
+          // Mindst 3 px, så uger uden tilbud stadig ses som en stub
+          const h = Math.max(3, Math.round((u.tilbud / maxVal) * højde));
           return (
             <View key={i} style={styles.søjleWrap}>
               <View style={[styles.søjle, { height: h }]} />

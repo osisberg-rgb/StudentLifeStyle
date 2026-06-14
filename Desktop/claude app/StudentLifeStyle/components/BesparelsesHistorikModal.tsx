@@ -10,12 +10,12 @@ import BesparelseGraf from './BesparelseGraf';
 
 type Props = {
   synlig: boolean;
-  sparet: number;
+  samletTilbud: number;
   uger: BesparelsesUge[];
   onLuk: () => void;
 };
 
-export default function BesparelsesHistorikModal({ synlig, sparet, uger, onLuk }: Props) {
+export default function BesparelsesHistorikModal({ synlig, samletTilbud, uger, onLuk }: Props) {
   if (!synlig) return null;
   const nyesteFørst = [...uger].sort((a, b) => b.uge - a.uge);
 
@@ -32,10 +32,10 @@ export default function BesparelsesHistorikModal({ synlig, sparet, uger, onLuk }
         <ScrollView contentContainerStyle={styles.indhold} showsVerticalScrollIndicator={false}>
           {/* Akkumuleret hero */}
           <View style={styles.hero}>
-            <Text style={styles.heroLabel}>Sparet i alt med Mæt</Text>
-            <Text style={styles.heroTal}>{formatKr(sparet)} kr</Text>
+            <Text style={styles.heroLabel}>Tilbud brugt i alt med Mæt</Text>
+            <Text style={styles.heroTal}>{samletTilbud}</Text>
             <Text style={styles.heroSub}>
-              fordelt på {uger.length} {uger.length === 1 ? 'madplan' : 'madplaner'}
+              tilbuds-varer fordelt på {uger.length} {uger.length === 1 ? 'madplan' : 'madplaner'}
             </Text>
           </View>
 
@@ -54,13 +54,10 @@ export default function BesparelsesHistorikModal({ synlig, sparet, uger, onLuk }
                 key={u.uge}
                 style={[styles.række, i < nyesteFørst.length - 1 && styles.rækkeBorder]}
               >
-                <View>
-                  <Text style={styles.ugeNavn}>Uge {u.uge}</Text>
-                  <Text style={styles.ugePris}>Brugt {formatKr(u.pris)} kr</Text>
-                </View>
+                <Text style={styles.ugeNavn}>Uge {u.uge}</Text>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.ugeSpar}>{formatKr(u.spar)} kr</Text>
-                  <Text style={styles.ugeSparLabel}>sparet</Text>
+                  <Text style={styles.ugeSpar}>{u.tilbud}</Text>
+                  <Text style={styles.ugeSparLabel}>tilbuds-varer</Text>
                 </View>
               </View>
             ))}

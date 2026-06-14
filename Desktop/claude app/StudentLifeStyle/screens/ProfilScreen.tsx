@@ -33,7 +33,7 @@ export default function ProfilScreen() {
   const [personer, setPersoner] = useState(4);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [historikÅben, setHistorikÅben] = useState(false);
-  const { sparet, antalPlaner, uger, klar: besparelseKlar } = useSamletBesparelse();
+  const { samletTilbud, antalPlaner, uger, klar: besparelseKlar } = useSamletBesparelse();
   const harPlaner = antalPlaner > 0;
 
   const navn = displayName ?? user?.email?.split('@')[0] ?? 'Profil';
@@ -117,12 +117,12 @@ export default function ProfilScreen() {
             activeOpacity={harPlaner ? 0.7 : 1}
             disabled={!harPlaner}
           >
-            <Text style={styles.statLabel}>Samlet besparelse</Text>
+            <Text style={styles.statLabel}>Tilbud brugt i alt</Text>
             {besparelseKlar && !harPlaner ? (
-              <Text style={styles.statTom}>Ingen besparelse registreret endnu.</Text>
+              <Text style={styles.statTom}>Ingen tilbud registreret endnu.</Text>
             ) : (
               <>
-                <Text style={styles.statVal}>{formatKr(sparet)} kr</Text>
+                <Text style={styles.statVal}>{samletTilbud} varer</Text>
                 <Text style={styles.statLink}>Se historik ›</Text>
               </>
             )}
@@ -339,7 +339,7 @@ export default function ProfilScreen() {
 
       <BesparelsesHistorikModal
         synlig={historikÅben}
-        sparet={sparet}
+        samletTilbud={samletTilbud}
         uger={uger}
         onLuk={() => setHistorikÅben(false)}
       />

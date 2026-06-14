@@ -19,7 +19,7 @@ export type BesparelsesRække = {
 };
 
 // Én uges tal til grafen og historikken
-export type BesparelsesUge = { uge: number; spar: number; pris: number };
+export type BesparelsesUge = { uge: number; spar: number; pris: number; tilbud: number };
 
 // Besparelsen for én gemt plan: total_spar-kolonnen → plan.besparelse →
 // udledt af plan.indkoebsliste → 0.
@@ -43,6 +43,23 @@ export function beregnPlanBesparelse(række: BesparelsesRække): number {
 
 export function beregnSamletBesparelse(rækker: BesparelsesRække[]): number {
   return rækker.reduce((sum, r) => sum + beregnPlanBesparelse(r), 0);
+}
+
+// Antal tilbuds-varer i én plan — tæller paa_tilbud-markerede ingredienser
+export function beregnPlanTilbud(række: BesparelsesRække): number {
+  if (!Array.isArray(række.plan_indkoebsliste)) return 0;
+  try {
+    return (række.plan_indkoebsliste as IndkoebsButik[])
+      .flatMap(b => b.varer ?? [])
+      .filter(v => v.paa_tilbud)
+      .length;
+  } catch {
+    return 0;
+  }
+}
+
+export function beregnSamletTilbud(rækker: BesparelsesRække[]): number {
+  return rækker.reduce((sum, r) => sum + beregnPlanTilbud(r), 0);
 }
 
 // Ugens samlede pris: total_pris-kolonnen → plan.indkoebspris → udledt af
@@ -71,7 +88,7 @@ export function beregnPlanPris(række: BesparelsesRække): number {
 export function byggUgeSerie(rækker: BesparelsesRække[]): BesparelsesUge[] {
   return rækker
     .filter(r => typeof r.uge_nr === 'number')
-    .map(r => ({ uge: r.uge_nr as number, spar: beregnPlanBesparelse(r), pris: beregnPlanPris(r) }))
+    .map(r => ({ uge: r.uge_nr as number, spar: beregnPlanBesparelse(r), pris: beregnPlanPris(r), tilbud: beregnPlanTilbud(r) }))
     .sort((a, b) => a.uge - b.uge);
 }
 

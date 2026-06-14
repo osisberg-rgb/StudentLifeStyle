@@ -13,7 +13,8 @@ import { supabase } from '../lib/supabase';
 import { Ingrediens, Madplan } from '../types/madplan';
 import { kategoriserIngrediens } from '../constants/indkoeb';
 import { bedsteTilbud, aktiveTilbud } from '../constants/tilbudspriser';
-import { useSamletBesparelse, formatKr } from '../hooks/useSamletBesparelse';
+import { tælTilbudsMatch } from '../constants/tilbudsMatch';
+import { useSamletBesparelse } from '../hooks/useSamletBesparelse';
 import { OPSKRIFTER } from '../constants/opskrifter';
 import { hentBillede } from '../constants/opskriftBilleder';
 
@@ -35,19 +36,21 @@ type Props = { navigation: any };
 export default function HomeScreen({ navigation }: Props) {
   const { user } = useAuth();
   const [madplan, setMadplan] = useState<Madplan | null>(null);
-  const [budget, setBudget] = useState(350);
   const [butikker, setButikker] = useState<string[]>([]);
   const [personer, setPersoner] = useState(4);
   const [navn, setNavn] = useState<string | null>(null);
   const [åbenOpskrift, setÅbenOpskrift] = useState<typeof OPSKRIFTER[0] | null>(null);
   const [historikÅben, setHistorikÅben] = useState(false);
-  const { sparet: sparetIAlt, antalPlaner, uger, klar: besparelseKlar } = useSamletBesparelse();
+  const { samletTilbud, antalPlaner, uger, klar: besparelseKlar } = useSamletBesparelse();
 
   const firstName = navn ?? user?.email?.split('@')[0] ?? 'dig';
   const weekNo = getWeekNumber();
   const idag = new Date().getDay();
-  const indkoebspris = madplan?.indkoebspris ?? madplan?.total ?? 0;
-  const saved = madplan ? Math.round(madplan.besparelse ?? 0) : 0;
+
+  // Tilbuds-count for indeværende uge
+  const alleVarer = (madplan?.indkoebsliste ?? []).flatMap(s => s.varer);
+  const ugeTilbud = alleVarer.filter(v => v.paa_tilbud).length;
+  const alleVarerAntal = alleVarer.length;
   // Looper tilbudsvarer + basispris-opslag + sortering — skal ikke køre
   // ved hvert re-render (fetch-svarene alene giver 3-4 renders pr. fokus)
   const ugensTilbud = useMemo(() => bedsteTilbud(3, butikker), [butikker, weekNo]);
@@ -69,16 +72,17 @@ export default function HomeScreen({ navigation }: Props) {
 
   const aftenBillede = aftenOpskrift ? hentBillede(aftenOpskrift.id) : null;
   const aftenMinutter = (aftenOpskrift as any)?.minutter as number | undefined;
-  const aftenButik = aftensmad?.ingredienser?.find((i: Ingrediens) => i.butik)?.butik;
+  const aftenTilbud = aftenOpskrift && !erRester
+    ? tælTilbudsMatch(aftenOpskrift.id, butikker)
+    : null;
 
   useFocusEffect(
     useCallback(() => {
       Promise.all([
         supabase.from('madplaner').select('plan, total_pris, total_spar').eq('uge_nr', weekNo).maybeSingle(),
-        supabase.from('profiles').select('budget_per_week, stores, household_size').maybeSingle(),
+        supabase.from('profiles').select('stores, household_size').maybeSingle(),
       ]).then(([{ data: plan }, { data: profil }]) => {
         if (plan) setMadplan(plan.plan);
-        if (profil?.budget_per_week) setBudget(profil.budget_per_week);
         if (profil?.stores) setButikker(profil.stores);
         if (profil?.household_size) setPersoner(profil.household_size);
       });
@@ -140,7 +144,11 @@ export default function HomeScreen({ navigation }: Props) {
                     </Text>
                     <View style={styles.aftenMetaRække}>
                       <Text style={styles.aftenMeta}>👤 {aftensmad.portioner} portioner</Text>
-                      {aftenButik && !erRester && <ButiksPill name={aftenButik} />}
+                      {aftenTilbud && aftenTilbud.antal > 0 && (
+                        <View style={styles.aftenTilbudBadge}>
+                          <Text style={styles.aftenTilbudTekst}>🏷 {aftenTilbud.antal} tilbud</Text>
+                        </View>
+                      )}
                     </View>
                     <TouchableOpacity
                       style={styles.aftenKnap}
@@ -153,14 +161,18 @@ export default function HomeScreen({ navigation }: Props) {
               </View>
             )}
 
-            {/* Sparekort — ugens besparelse (over-tid ligger i eget kort) */}
+            {/* Tilbuds-kort — ugens deal-count */}
             <View style={styles.sparekort}>
-              <Text style={styles.spareLabel}>Du sparer i denne uge</Text>
-              <Text style={styles.spareBeløb}>{saved} kr</Text>
+              <Text style={styles.spareLabel}>Tilbud brugt denne uge</Text>
+              <Text style={styles.spareBeløb}>{ugeTilbud} varer</Text>
               <View style={styles.progressBg}>
-                <View style={[styles.progressFill, { width: `${Math.min(100, Math.round((indkoebspris / Math.max(1, budget)) * 100))}%` }]} />
+                <View style={[styles.progressFill, {
+                  width: `${alleVarerAntal === 0 ? 0 : Math.min(100, Math.round((ugeTilbud / alleVarerAntal) * 100))}%`
+                }]} />
               </View>
-              <Text style={styles.spareSub}>Brugt {indkoebspris} / {budget} kr</Text>
+              <Text style={styles.spareSub}>
+                {ugeTilbud} af {alleVarerAntal} ingredienser er på tilbud
+              </Text>
             </View>
           </>
         ) : (
@@ -168,7 +180,7 @@ export default function HomeScreen({ navigation }: Props) {
           <View style={styles.ctaKort}>
             <Text style={styles.ctaTitel}>Klar til ugens madplan?</Text>
             <Text style={styles.ctaSub}>
-              Vælg ugens retter — vi finder tilbuddene og regner prisen ud.
+              Vælg ugens retter — vi finder hvilke ingredienser der er på tilbud i dine butikker.
             </Text>
             <TouchableOpacity style={styles.ctaKnap} onPress={() => navigation.navigate('Planer')}>
               <Text style={styles.ctaKnapTekst}>Lav ugens plan</Text>
@@ -187,8 +199,8 @@ export default function HomeScreen({ navigation }: Props) {
           >
             <View style={styles.tidHeader}>
               <View>
-                <Text style={styles.tidLabel}>Sparet i alt med Mæt</Text>
-                <Text style={styles.tidTal}>{formatKr(sparetIAlt)} kr</Text>
+                <Text style={styles.tidLabel}>Tilbud brugt i alt med Mæt</Text>
+                <Text style={styles.tidTal}>{samletTilbud} varer</Text>
               </View>
               <Text style={styles.tidLink}>Se historik ›</Text>
             </View>
@@ -247,7 +259,7 @@ export default function HomeScreen({ navigation }: Props) {
 
       <BesparelsesHistorikModal
         synlig={historikÅben}
-        sparet={sparetIAlt}
+        samletTilbud={samletTilbud}
         uger={uger}
         onLuk={() => setHistorikÅben(false)}
       />
@@ -305,6 +317,12 @@ const styles = StyleSheet.create({
   aftenNavn: { fontSize: 17, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.ink, letterSpacing: -0.3 },
   aftenMetaRække: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
   aftenMeta: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.inkSoft },
+  aftenTilbudBadge: {
+    backgroundColor: '#F0FAF0', borderRadius: 999,
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderWidth: 1, borderColor: Colors.green,
+  },
+  aftenTilbudTekst: { fontSize: 11, fontFamily: 'Inter_600SemiBold', color: Colors.green },
   aftenKnap: {
     backgroundColor: Colors.green, borderRadius: Radii.btn,
     padding: 13, alignItems: 'center', marginTop: 12,
