@@ -10,6 +10,7 @@ import { KATEGORIER, KategoriId } from '../constants/kategorier';
 import { findAnbefaledeRetter, måltiderPrRet, MAKS_RETTER, UGE_MAAL } from '../constants/anbefaling';
 import { hentBillede } from '../constants/opskriftBilleder';
 import { tælTilbudsMatch } from '../constants/tilbudsMatch';
+import ButiksPill from './ButiksPill';
 
 const KOED_EMOJI: Record<string, string> = {
   Kylling: '🐔',
@@ -325,9 +326,7 @@ export default function VælgRetterModal({ synlig, kost, budget, butikker, perso
                           : info && info.gangeOpskrift > 1 ? ` · ${info.gangeOpskrift}×` : ''}
                       </Text>
                       {tilbudsMatch.butikker.length > 0 && (
-                        <Text style={styles.kortButik} numberOfLines={1}>
-                          {tilbudsMatch.butikker[0]}
-                        </Text>
+                        <ButiksPill name={tilbudsMatch.butikker[0]} />
                       )}
                     </View>
                   </View>
@@ -501,7 +500,6 @@ const styles = StyleSheet.create({
   kortNavnValgt: { color: Colors.green },
   kortMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 4 },
   kortPortioner: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, flex: 1 },
-  kortButik: { fontSize: 11, fontFamily: 'Inter_600SemiBold', color: Colors.inkSoft },
 
   bund: {
     padding: 20, paddingBottom: 32,
