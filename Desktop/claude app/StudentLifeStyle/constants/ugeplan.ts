@@ -105,11 +105,6 @@ export function byggUgeplan(
   const indkoebspris = Math.round(indkoebsliste.reduce((s, b) => s + b.subtotal, 0));
   const besparelse = beregnBesparelse(indkoebsliste);
 
-  const advarsler: string[] = [];
-  if (indkoebspris > budget) {
-    advarsler.push(`Planen er ${indkoebspris - budget} kr over budgettet på ${budget} kr`);
-  }
-
   return {
     uge: ugeNr,
     antal_personer: personer,
@@ -123,6 +118,6 @@ export function byggUgeplan(
     indkoebspris,
     total: indkoebspris,
     besparelse,
-    advarsler,
+    advarsler: [],
   };
 }

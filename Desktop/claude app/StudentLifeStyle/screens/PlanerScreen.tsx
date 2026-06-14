@@ -20,13 +20,13 @@ import { byggUgeplan } from '../constants/ugeplan';
 import { tagForvalgteRetter } from '../constants/onboardingHandoff';
 import { sætValgtUge, hentValgtUge } from '../constants/ugeState';
 import { hentBillede } from '../constants/opskriftBilleder';
+import { tælTilbudsMatch } from '../constants/tilbudsMatch';
 
 export default function PlanerScreen() {
   const [madplan, setMadplan] = useState<Madplan | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [uge, setUge] = useState(() => hentValgtUge(getWeekNumber()));
-  const [budget, setBudget] = useState(350);
   const [valgtMaltid, setValgtMaltid] = useState<{ maltid: Maltid; type: string; dag: string } | null>(null);
   const [vælgerSynlig, setVælgerSynlig] = useState(false);
   const [kost, setKost] = useState<string[]>(['Alt']);
@@ -67,9 +67,8 @@ export default function PlanerScreen() {
         setVælgerSynlig(true);
       }
       hentMadplan(uge);
-      supabase.from('profiles').select('budget_per_week, diet, stores, household_size').maybeSingle()
+      supabase.from('profiles').select('diet, stores, household_size').maybeSingle()
         .then(({ data }) => {
-          if (data?.budget_per_week) setBudget(data.budget_per_week);
           if (data?.diet) setKost(data.diet);
           if (data?.stores) setButikker(data.stores);
           if (data?.household_size) setPersoner(data.household_size);
@@ -96,10 +95,7 @@ export default function PlanerScreen() {
   async function generer(opskriftIds: string[]) {
     setGenerating(true);
     try {
-      // Byg hele planen deterministisk i appen — øjeblikkeligt, gratis, offline.
-      // (Ingen AI: dag-fordeling, rester, indkøbsliste og priser er alle
-      // beregnet med samme motor som resten af appen.)
-      const plan = byggUgeplan(opskriftIds, butikker, personer, uge, budget);
+      const plan = byggUgeplan(opskriftIds, butikker, personer, uge, 0);
 
       const { data: { user: u } } = await supabase.auth.getUser();
       if (!u) throw new Error('Ikke logget ind');
@@ -251,11 +247,12 @@ export default function PlanerScreen() {
       return;
     }
     setMadplan(nyPlan);
-    const delta = nyTotal - gammelTotal;
+    const nyMatch = tælTilbudsMatch(nyId, butikker);
     Alert.alert(
       'Ret byttet ✅',
-      `Ugens pris: ${nyTotal} kr (${delta === 0 ? '±0' : `${delta > 0 ? '+' : '−'}${Math.abs(delta)}`} kr)` +
-      (nySpar > 0 ? ` · du sparer ${nySpar} kr på tilbud` : '')
+      nyMatch.antal > 0
+        ? `${opskrift.navn} har ${nyMatch.antal} ingredienser på tilbud`
+        : `${opskrift.navn} er tilføjet til ugen`
     );
   }
 
@@ -294,33 +291,26 @@ export default function PlanerScreen() {
           </TouchableOpacity>
           <View style={{ alignItems: 'center' }}>
             <Text style={styles.ugeNr}>Uge {uge}</Text>
-            {madplan && (
-              <Text style={styles.ugeSub}>
-                {madplan.indkoebspris ?? madplan.total ?? 0} / {budget} kr
-                {(madplan.besparelse ?? 0) > 0
-                  ? ` · spar ${madplan.besparelse} kr på tilbud`
-                  : ` · ${Math.max(0, budget - (madplan.indkoebspris ?? madplan.total ?? 0))} kr tilbage`
-                }
-              </Text>
-            )}
+            {madplan && (() => {
+              const antal = (madplan.indkoebsliste ?? [])
+                .flatMap(s => s.varer).filter(v => v.paa_tilbud).length;
+              return (
+                <Text style={styles.ugeSub}>
+                  {antal > 0 ? `🏷 ${antal} tilbuds-varer i planen` : 'Ingen tilbud denne uge'}
+                </Text>
+              );
+            })()}
           </View>
           <TouchableOpacity onPress={() => skiftUge(1)}>
             <Text style={styles.ugeArrow}>›</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Advarsel hvis planen er over budget */}
-        {madplan?.advarsler && madplan.advarsler.length > 0 && (
-          <View style={styles.advarsel}>
-            <Text style={styles.advarselTekst}>⚠️ {madplan.advarsler[0]}</Text>
-          </View>
-        )}
-
         {(loading || generating) && (
           <View style={styles.loadingWrap}>
             <ActivityIndicator color={Colors.green} size="large" />
             <Text style={styles.loadingText}>
-              {generating ? 'Bygger din madplan og regner priserne ud...' : 'Henter madplan...'}
+              {generating ? 'Bygger din madplan...' : 'Henter madplan...'}
             </Text>
           </View>
         )}
@@ -329,7 +319,7 @@ export default function PlanerScreen() {
           <View style={styles.tom}>
             <Text style={styles.tomEmoji}>🗓️</Text>
             <Text style={styles.tomTekst}>Ingen plan for denne uge</Text>
-            <Text style={styles.tomSub}>Vælg ugens retter og få indkøbsliste med tilbudspriser</Text>
+            <Text style={styles.tomSub}>Vælg ugens retter og se hvilke ingredienser der er på tilbud</Text>
             <TouchableOpacity style={styles.btnPrimary} onPress={() => setVælgerSynlig(true)}>
               <Text style={styles.btnText}>Generér madplan</Text>
             </TouchableOpacity>
@@ -346,7 +336,9 @@ export default function PlanerScreen() {
           const opskrift = findOpskriftForNavn(rentNavn);
           const billede = opskrift ? hentBillede(opskrift.id) : null;
           const minutter = (opskrift as any)?.minutter as number | undefined;
-          const butik = aften?.ingredienser?.find(ig => ig.butik)?.butik;
+          const tilbudsMatch = opskrift && !erRester
+            ? tælTilbudsMatch(opskrift.id, butikker)
+            : null;
 
           return (
             <TouchableOpacity
@@ -379,7 +371,11 @@ export default function PlanerScreen() {
                       {minutter != null && !erRester && (
                         <Text style={styles.aftenTid}>⏱ {minutter} min</Text>
                       )}
-                      {butik && !erRester ? <ButiksPill name={butik} /> : null}
+                      {tilbudsMatch && tilbudsMatch.antal > 0 && (
+                        <View style={styles.tilbudsBadge}>
+                          <Text style={styles.tilbudsBadgeTekst}>🏷 {tilbudsMatch.antal} tilbud</Text>
+                        </View>
+                      )}
                     </View>
                   </View>
                   {/* Byt direkte fra dag-kortet — låsen følger KORTETS dag:
@@ -420,7 +416,7 @@ export default function PlanerScreen() {
       <VælgRetterModal
         synlig={vælgerSynlig}
         kost={kost}
-        budget={budget}
+        budget={0}
         butikker={butikker}
         personer={personer}
         forvalgte={forvalgte}
@@ -491,11 +487,12 @@ const styles = StyleSheet.create({
   ugeArrow: { fontSize: 28, color: '#fff', paddingHorizontal: 8 },
   ugeNr: { fontSize: 18, fontFamily: 'BricolageGrotesque_700Bold', color: '#fff', letterSpacing: -0.3 },
   ugeSub: { fontSize: 12, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.75)', marginTop: 2 },
-  advarsel: {
-    backgroundColor: '#FFF8E1', borderRadius: Radii.btn, padding: 12,
-    marginBottom: 14, borderWidth: 1, borderColor: Colors.yellow,
+  tilbudsBadge: {
+    backgroundColor: '#F0FAF0', borderRadius: 999,
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderWidth: 1, borderColor: Colors.green,
   },
-  advarselTekst: { fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.ink },
+  tilbudsBadgeTekst: { fontSize: 11, fontFamily: 'Inter_600SemiBold', color: Colors.green },
   loadingWrap: { alignItems: 'center', marginTop: 60, gap: 16 },
   loadingText: { fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, textAlign: 'center', paddingHorizontal: 32 },
   tom: { alignItems: 'center', marginTop: 60, gap: 12 },

@@ -64,11 +64,10 @@ export default function IndkøbScreen() {
 
   async function gemListe(nyeSektioner: IndkoebsButik[]) {
     if (!planRef.current) return;
-    const nyTotal = beregnTotal(nyeSektioner);
-    const nyPlan = { ...planRef.current, indkoebsliste: nyeSektioner, indkoebspris: nyTotal, total: nyTotal };
+    const nyPlan = { ...planRef.current, indkoebsliste: nyeSektioner };
     planRef.current = nyPlan;
     await supabase.from('madplaner')
-      .update({ plan: nyPlan, total_pris: nyTotal })
+      .update({ plan: nyPlan })
       .eq('uge_nr', uge);
   }
 
@@ -91,11 +90,6 @@ export default function IndkøbScreen() {
     gemListe(ny);
   }
 
-  // Total = kun varer der IKKE er markeret som "har det allerede"
-  const total = beregnTotal(sektioner);
-  const sparetVedHarDet = sektioner.reduce((acc, s) =>
-    acc + s.varer.reduce((sum, v) => (v as any).checked ? sum + v.pris : sum, 0), 0
-  );
   // Fremdrift: i butikken er "hvor langt er jeg?" det vigtigste spørgsmål
   const alleVarerFlad = sektioner.flatMap(s => s.varer);
   const antalVarer = alleVarerFlad.length;
@@ -144,12 +138,14 @@ export default function IndkøbScreen() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {sektioner.map((sektion, si) => {
-          const sektionTotal = sektion.varer.reduce((s, v) => (v as any).checked ? s : s + v.pris, 0);
+          const tilbudsAntal = sektion.varer.filter(v => v.paa_tilbud && !(v as any).checked).length;
           return (
             <View key={si} style={styles.sektion}>
               <View style={styles.sektionHeader}>
                 <ButiksPill name={sektion.butik} />
-                <Text style={styles.subtotal}>{sektionTotal} kr</Text>
+                {tilbudsAntal > 0 && (
+                  <Text style={styles.sektionTilbud}>🏷 {tilbudsAntal} på tilbud</Text>
+                )}
               </View>
               <View style={styles.sektionKort}>
                 {sektion.varer.map((vare: Vare, vi) => (
@@ -187,49 +183,22 @@ export default function IndkøbScreen() {
                       )}
                     </View>
 
-                    {/* Højre: pris + fjern-knap */}
-                    <View style={styles.hojre}>
-                      <View style={styles.prisStak}>
-                        {vare.paa_tilbud && vare.normalpris != null && !vare.checked && (
-                          <Text style={styles.normalprisStreg}>{vare.normalpris},-</Text>
-                        )}
-                        <Text style={[
-                          styles.varePris,
-                          vare.paa_tilbud && !vare.checked && styles.varePrisTilbud,
-                          vare.checked && styles.varePrisChecked,
-                        ]}>
-                          {vare.pris},-
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => fjernVare(si, vi)}
-                        style={styles.fjernKnap}
-                        hitSlop={{ top: 10, bottom: 10, left: 6, right: 12 }}
-                      >
-                        <Text style={styles.fjernIkon}>✕</Text>
-                      </TouchableOpacity>
-                    </View>
+                    {/* Højre: fjern-knap */}
+                    <TouchableOpacity
+                      onPress={() => fjernVare(si, vi)}
+                      style={styles.fjernKnap}
+                      hitSlop={{ top: 10, bottom: 10, left: 6, right: 12 }}
+                    >
+                      <Text style={styles.fjernIkon}>✕</Text>
+                    </TouchableOpacity>
                   </View>
                 ))}
               </View>
             </View>
           );
         })}
-        <View style={{ height: 120 }} />
+        <View style={{ height: 32 }} />
       </ScrollView>
-
-      <View style={styles.totalBar}>
-        <View>
-          <Text style={styles.totalLabel}>I alt for ugen</Text>
-          <Text style={styles.totalBeløb}>{total} kr</Text>
-        </View>
-        {sparetVedHarDet > 0 && (
-          <View style={styles.sparetBoks}>
-            <Text style={styles.sparetLabel}>Har i forvejen</Text>
-            <Text style={styles.sparetBeløb}>−{sparetVedHarDet} kr</Text>
-          </View>
-        )}
-      </View>
     </SafeAreaView>
   );
 }
@@ -282,7 +251,7 @@ const styles = StyleSheet.create({
   tomSub: { fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, textAlign: 'center', lineHeight: 20 },
   sektion: { marginBottom: 20 },
   sektionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  subtotal: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.inkSoft },
+  sektionTilbud: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: Colors.green },
   sektionKort: {
     backgroundColor: Colors.card, borderRadius: Radii.card,
     borderWidth: 1, borderColor: Colors.line, overflow: 'hidden',
@@ -303,25 +272,9 @@ const styles = StyleSheet.create({
   vareMaengde: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, marginTop: 2 },
   tilbudRække: { flexDirection: 'row', marginTop: 4 },
   harDetNote: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: Colors.green, marginTop: 2 },
-  hojre: { flexDirection: 'row', alignItems: 'center', gap: 14, marginLeft: 8 },
-  prisStak: { alignItems: 'flex-end' },
-  normalprisStreg: { fontSize: 11, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, textDecorationLine: 'line-through' },
-  varePris: { fontSize: 14, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.ink },
-  varePrisTilbud: { color: Colors.green },
-  varePrisChecked: { color: Colors.inkSoft, textDecorationLine: 'line-through' },
   fjernKnap: {
     width: 24, height: 24, borderRadius: 12,
     backgroundColor: Colors.line, alignItems: 'center', justifyContent: 'center',
   },
   fjernIkon: { fontSize: 11, color: Colors.inkSoft, fontFamily: 'Inter_700Bold' },
-  totalBar: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: Colors.green, padding: 20,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-  },
-  totalLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: 'rgba(255,255,255,0.7)', marginBottom: 4 },
-  totalBeløb: { fontSize: 26, fontFamily: 'BricolageGrotesque_800ExtraBold', color: '#fff', letterSpacing: -0.5 },
-  sparetBoks: { alignItems: 'flex-end' },
-  sparetLabel: { fontSize: 11, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.7)', marginBottom: 2 },
-  sparetBeløb: { fontSize: 18, fontFamily: 'BricolageGrotesque_700Bold', color: '#fff' },
 });
