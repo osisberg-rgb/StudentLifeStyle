@@ -19,8 +19,10 @@ export type TilbudsKilde = {
   varer: Array<{ navn: string; soeg: string[]; pris: number }>;
 };
 
-// Tilføj nye butikker ved at oprette tilbud/<butik>.ts og importere her.
-// Tom varer[] eller forkert uge-nr → filen ignoreres automatisk.
+// De hardkodede filer er nu FALLBACK/seed. Den primære kilde er Supabase-
+// tabellen `tilbud`, der synkroniseres ind via sætTilbudskilder() (se
+// lib/tilbudSync.ts) — så tilbud kan opdateres live uden app-redeploy.
+// Indtil synkronisering er sket / hvis den fejler, bruges disse filer.
 const TILBUDSKILDER: TilbudsKilde[] = [
   REMA1000_TILBUD,
   NETTO_TILBUD,
@@ -31,6 +33,28 @@ const TILBUDSKILDER: TilbudsKilde[] = [
   KVIKLY_TILBUD,
   BILKA_TILBUD,
 ];
+
+// Fjernkilde (Supabase) overskriver de hardkodede filer, når den er sat med
+// gyldige data. sætTilbudskilder(null) eller en tom liste falder tilbage til
+// filerne — så appen virker uændret, indtil tabellen er fyldt.
+let fjernKilder: TilbudsKilde[] | null = null;
+
+export function sætTilbudskilder(kilder: TilbudsKilde[] | null): void {
+  fjernKilder = kilder && kilder.length > 0 ? kilder : null;
+  // Tøm caches, så de nye priser slår igennem med det samme
+  tilbudCache = null;
+  prisCache.clear();
+}
+
+// Er live-tilbud aktive (mindst én butik fra DB'en for indeværende uge)?
+// Til diagnostik / "live"-badge i UI hvis ønsket.
+export function brugerLiveTilbud(): boolean {
+  return fjernKilder !== null;
+}
+
+function alleKilder(): TilbudsKilde[] {
+  return fjernKilder ?? TILBUDSKILDER;
+}
 
 export type EffektivPris = {
   pris: number;            // den pris programmet skal bruge
@@ -57,7 +81,7 @@ let tilbudCache: { uge: number; kilder: TilbudsKilde[] } | null = null;
 export function aktiveTilbud(butikker?: string[]): TilbudsKilde[] {
   const uge = aktuelUge();
   if (!tilbudCache || tilbudCache.uge !== uge) {
-    tilbudCache = { uge, kilder: TILBUDSKILDER.filter(k => matcherUge(k, uge)) };
+    tilbudCache = { uge, kilder: alleKilder().filter(k => matcherUge(k, uge)) };
   }
   if (!butikker || butikker.length === 0) return tilbudCache.kilder;
   return tilbudCache.kilder.filter(k => butikker.includes(k.butik));

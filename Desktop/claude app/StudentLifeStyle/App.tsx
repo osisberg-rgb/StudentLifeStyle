@@ -20,6 +20,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { Colors } from './constants/theme';
 import { supabase } from './lib/supabase';
 import { harForvalgteRetter } from './constants/onboardingHandoff';
+import { synkroniserTilbud } from './lib/tilbudSync';
 
 import LoginScreen from './screens/LoginScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
@@ -154,6 +155,10 @@ export default function App() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
+
+  // Hent ugens tilbud fra Supabase ved opstart (fire-and-forget). Indtil den
+  // er færdig — eller hvis tabellen er tom — bruger motoren fallback-filerne.
+  useEffect(() => { synkroniserTilbud(true); }, []);
 
   if (!fontsLoaded) {
     return (

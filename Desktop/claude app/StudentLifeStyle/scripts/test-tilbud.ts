@@ -11,6 +11,7 @@ import { KATEGORIER } from '../constants/kategorier';
 import { findAnbefaledeRetter, måltiderPrRet, MAKS_RETTER, UGE_MAAL } from '../constants/anbefaling';
 import { beregnPlanBesparelse, beregnSamletBesparelse, beregnPlanPris, byggUgeSerie, formatKr } from '../constants/besparelse';
 import { byggUgeplan } from '../constants/ugeplan';
+import { grupperTilbud } from '../lib/tilbudSync';
 
 let fejl = 0;
 function tjek(navn: string, ok: boolean, detalje = '') {
@@ -377,6 +378,42 @@ tjek('Rester ligger efter den kogte aften', førsteRest > førsteKogt,
 
 tjek('Over budget → advarsel', byggUgeplan(ugeIds, undefined, 4, 24, 10).advarsler!.length > 0);
 tjek('Inden for budget → ingen advarsel', planFam.advarsler!.length === 0);
+
+// ── 17. grupperTilbud (live-sync) ────────────────────────────────────────────
+console.log('\n=== 17. grupperTilbud (Supabase live-sync) ===');
+
+const tomRæk: any[] = [];
+tjek('Tom liste → tom array', grupperTilbud(tomRæk).length === 0);
+
+const rækker = [
+  { butik: 'Netto', uge: 25, navn: 'Hakket oksekød 500 g', soeg: ['hakket oksekød'], pris: 29.95 },
+  { butik: 'Netto', uge: 25, navn: 'Pasta 500 g', soeg: ['pasta'], pris: 8.95 },
+  { butik: 'Rema 1000', uge: 25, navn: 'Kyllingefilet 1 kg', soeg: ['kylling', 'kyllingefilet'], pris: 59.95 },
+  { butik: 'Netto', uge: 26, navn: 'Laks 400 g', soeg: ['laks'], pris: 39.95 },
+  { butik: 'Ugyldig', uge: NaN, navn: 'Ugyldigt produkt', soeg: null, pris: 1.0 },
+  { butik: '', uge: 25, navn: 'Mangler butik', soeg: null, pris: 5.0 },
+];
+const kilder = grupperTilbud(rækker);
+
+tjek('3 gyldige rækker → 3 kilder (Netto uge25, Rema uge25, Netto uge26)',
+  kilder.length === 3, `${kilder.length} kilder`);
+
+const nettoUge25 = kilder.find(k => k.butik === 'Netto' && k.uge === 25);
+tjek('Netto uge 25 har 2 varer', nettoUge25?.varer.length === 2,
+  `${nettoUge25?.varer.length} varer`);
+
+tjek('Vare med null soeg → tomt array', nettoUge25?.varer[0].soeg !== undefined &&
+  Array.isArray(nettoUge25.varer[0].soeg));
+
+const remaKilde = kilder.find(k => k.butik === 'Rema 1000');
+tjek('Rema 1000 uge 25 har 1 vare', remaKilde?.varer.length === 1);
+tjek('Rema vare: soeg er array med 2 søgeord', remaKilde?.varer[0].soeg.length === 2);
+
+const nettoUge26 = kilder.find(k => k.butik === 'Netto' && k.uge === 26);
+tjek('Netto uge 26 er adskilt kilde fra Netto uge 25', nettoUge26 !== nettoUge25);
+
+tjek('Rækker med NaN uge springes over', !kilder.some(k => isNaN(k.uge as number)));
+tjek('Rækker uden butik-navn springes over', !kilder.some(k => k.butik === ''));
 
 console.log('');
 if (fejl > 0) throw new Error(`${fejl} test(s) FEJLEDE`);
