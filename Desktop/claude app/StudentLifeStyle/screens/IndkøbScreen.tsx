@@ -183,7 +183,10 @@ export default function IndkøbScreen() {
                       )}
                     </View>
 
-                    {/* Højre: fjern-knap */}
+                    {/* Højre: tilbudspris + fjern-knap */}
+                    {vare.paa_tilbud && !vare.checked && (
+                      <Text style={styles.varePrisTilbud}>{vare.pris},-</Text>
+                    )}
                     <TouchableOpacity
                       onPress={() => fjernVare(si, vi)}
                       style={styles.fjernKnap}
@@ -272,6 +275,10 @@ const styles = StyleSheet.create({
   vareMaengde: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, marginTop: 2 },
   tilbudRække: { flexDirection: 'row', marginTop: 4 },
   harDetNote: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: Colors.green, marginTop: 2 },
+  varePrisTilbud: {
+    fontSize: 14, fontFamily: 'BricolageGrotesque_700Bold',
+    color: Colors.red, marginLeft: 8,
+  },
   fjernKnap: {
     width: 24, height: 24, borderRadius: 12,
     backgroundColor: Colors.line, alignItems: 'center', justifyContent: 'center',

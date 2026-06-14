@@ -36,7 +36,6 @@ export default function OpskriftDetaljeModal({ opskrift, butikker, personer, onL
   const gange = personer ? Math.max(1, Math.ceil(personer / basePortioner - 1e-9)) : 1;
   const portionerIAlt = basePortioner * gange;
 
-  const total = ingredienser.reduce((sum, i) => sum + slåEffektivPrisOp(i, butikker).pris, 0) * gange;
   const billede = hentBillede(opskrift.id);
 
   return (
@@ -85,23 +84,24 @@ export default function OpskriftDetaljeModal({ opskrift, butikker, personer, onL
           <View style={styles.ingrediensKort}>
             {ingredienser.map((ing, idx) => {
               const effektiv = slåEffektivPrisOp(ing, butikker);
-              const erEstimeret = !!ing.estimeret;
               return (
                 <View key={idx} style={[styles.ingRække, idx < ingredienser.length - 1 && styles.ingRækkeBorder]}>
                   <View style={styles.ingVenstre}>
                     <Text style={styles.ingNavn}>{ing.navn}</Text>
                     <Text style={styles.ingMaengde}>
-                      {gange > 1 ? `${gange} × ` : ''}{ing.maengde}{effektiv.paaTilbud ? `  ·  tilbud i ${effektiv.butik}` : ''}
+                      {gange > 1 ? `${gange} × ` : ''}{ing.maengde}
+                      {effektiv.paaTilbud ? `  ·  ${effektiv.butik}` : ''}
                     </Text>
                   </View>
-                  <Text style={[styles.ingPris, erEstimeret && styles.ingPrisEst, effektiv.paaTilbud && styles.ingPrisTilbud]}>
-                    {effektiv.pris * gange} kr{erEstimeret ? '*' : ''}
-                  </Text>
+                  {effektiv.paaTilbud && (
+                    <Text style={styles.ingPrisTilbud}>
+                      {effektiv.pris * gange} kr
+                    </Text>
+                  )}
                 </View>
               );
             })}
           </View>
-          <Text style={styles.estimereretNote}>* Estimeret basisvare</Text>
 
           {/* Fremgangsmåde */}
           {opskrift.fremgangsmaade && opskrift.fremgangsmaade.length > 0 && (
@@ -122,12 +122,8 @@ export default function OpskriftDetaljeModal({ opskrift, butikker, personer, onL
           </View>{/* /indholdPadding */}
         </ScrollView>
 
-        {/* Total + knap */}
+        {/* Knap */}
         <View style={styles.bund}>
-          <View style={styles.totalRække}>
-            <Text style={styles.totalLabel}>Samlet indkøbspris</Text>
-            <Text style={styles.totalPris}>{Math.round(total)} kr</Text>
-          </View>
           {onTilføj && (
             <TouchableOpacity
               style={[styles.tilføjKnap, gemmer && styles.knapDisabled]}
@@ -199,13 +195,7 @@ const styles = StyleSheet.create({
   ingVenstre: { flex: 1 },
   ingNavn: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.ink },
   ingMaengde: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, marginTop: 1 },
-  ingPris: { fontSize: 15, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.ink, marginLeft: 12 },
-  ingPrisEst: { color: Colors.inkSoft },
-  ingPrisTilbud: { color: Colors.green },
-  estimereretNote: {
-    fontSize: 11, fontFamily: 'Inter_400Regular', color: Colors.inkSoft,
-    marginTop: 6, marginLeft: 4,
-  },
+  ingPrisTilbud: { fontSize: 15, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.red, marginLeft: 12 },
   fremgangKort: {
     backgroundColor: Colors.card, borderRadius: Radii.card,
     borderWidth: 1, borderColor: Colors.line, padding: 16, gap: 12,
@@ -222,11 +212,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: Colors.line,
     backgroundColor: Colors.paper, gap: 12,
   },
-  totalRække: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-  },
-  totalLabel: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.inkSoft },
-  totalPris: { fontSize: 22, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.ink },
   tilføjKnap: {
     backgroundColor: Colors.green, borderRadius: Radii.btn,
     padding: 16, alignItems: 'center',
