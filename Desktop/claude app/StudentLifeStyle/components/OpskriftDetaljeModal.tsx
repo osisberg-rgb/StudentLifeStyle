@@ -1,12 +1,15 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal, View, Text, StyleSheet, ScrollView,
   TouchableOpacity, SafeAreaView, ActivityIndicator, ImageBackground,
 } from 'react-native';
 import { Colors, Radii } from '../constants/theme';
-import { OPSKRIFTER } from '../constants/opskrifter';
 import { slåEffektivPrisOp } from '../constants/tilbudspriser';
-import { hentBillede } from '../constants/opskriftBilleder';
+import { billedeFor } from '../constants/opskriftBilleder';
+import { erFavorit, sætFavorit } from '../lib/favoritter';
+import KlokkeKnap from './KlokkeKnap';
+import { hentWatchlist, termFraFritekst } from '../lib/watchlist';
+import type { Opskrift } from '../types/opskrift';
 
 const KOED_EMOJI: Record<string, string> = {
   Kylling: '🐔',
@@ -16,16 +19,37 @@ const KOED_EMOJI: Record<string, string> = {
 };
 
 type Props = {
-  opskrift: typeof OPSKRIFTER[0] | null;
+  opskrift: Opskrift | null;
   butikker?: string[];
   personer?: number;
   onLuk: () => void;
   onTilføj?: (id: string) => void;
   gemmer?: boolean;
+  // Sat → viser "Læg på madplan"-knap (vælg dag bagefter)
+  onLægPåPlan?: () => void;
+  // Sat for egne (importerede) opskrifter → viser "Rediger"/"Slet"-knapper
+  onRediger?: () => void;
+  onSlet?: () => void;
 };
 
-export default function OpskriftDetaljeModal({ opskrift, butikker, personer, onLuk, onTilføj, gemmer }: Props) {
+export default function OpskriftDetaljeModal({ opskrift, butikker, personer, onLuk, onTilføj, gemmer, onLægPåPlan, onRediger, onSlet }: Props) {
+  // Favorit-hjertet — synkroniseres når en ny opskrift åbnes
+  const [favorit, setFavorit] = useState(false);
+  useEffect(() => {
+    setFavorit(opskrift ? erFavorit(opskrift.id) : false);
+  }, [opskrift?.id]);
+  // Hent overvågede varer når modalen åbnes, så 🔔 på ingredienser viser korrekt
+  useEffect(() => { if (opskrift) hentWatchlist(); }, [opskrift?.id]);
+
   if (!opskrift) return null;
+
+  async function toggleFavorit() {
+    if (!opskrift) return;
+    const ny = !favorit;
+    setFavorit(ny); // optimistisk
+    const ok = await sætFavorit(opskrift.id, ny);
+    if (!ok) setFavorit(!ny); // rul tilbage ved fejl
+  }
 
   const ingredienser = (opskrift.ingredienser as any[]).filter(
     i => !(i.estimeret && i.estimereretPris === 0)
@@ -36,7 +60,7 @@ export default function OpskriftDetaljeModal({ opskrift, butikker, personer, onL
   const gange = personer ? Math.max(1, Math.ceil(personer / basePortioner - 1e-9)) : 1;
   const portionerIAlt = basePortioner * gange;
 
-  const billede = hentBillede(opskrift.id);
+  const billede = billedeFor(opskrift);
 
   return (
     <Modal
@@ -52,9 +76,14 @@ export default function OpskriftDetaljeModal({ opskrift, butikker, personer, onL
             {billede ? (
               <ImageBackground source={billede} style={styles.hero} imageStyle={styles.heroImg}>
                 <View style={styles.heroOverlay} />
-                <TouchableOpacity onPress={onLuk} style={styles.lukKnap}>
-                  <Text style={styles.lukTekst}>✕</Text>
-                </TouchableOpacity>
+                <View style={styles.heroTop}>
+                  <TouchableOpacity onPress={toggleFavorit} style={styles.hjerteKnap} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={styles.hjerteTekst}>{favorit ? '❤️' : '🤍'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={onLuk} style={styles.lukKnap}>
+                    <Text style={styles.lukTekst}>✕</Text>
+                  </TouchableOpacity>
+                </View>
                 <View style={styles.heroTekst}>
                   <Text style={styles.navn}>{opskrift.navn}</Text>
                   <Text style={styles.meta}>
@@ -64,9 +93,14 @@ export default function OpskriftDetaljeModal({ opskrift, butikker, personer, onL
               </ImageBackground>
             ) : (
               <View style={[styles.hero, styles.heroFallback]}>
-                <TouchableOpacity onPress={onLuk} style={styles.lukKnapDark}>
-                  <Text style={styles.lukTekstDark}>✕</Text>
-                </TouchableOpacity>
+                <View style={styles.heroTop}>
+                  <TouchableOpacity onPress={toggleFavorit} style={styles.hjerteKnapDark} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={styles.hjerteTekst}>{favorit ? '❤️' : '🤍'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={onLuk} style={styles.lukKnapDark}>
+                    <Text style={styles.lukTekstDark}>✕</Text>
+                  </TouchableOpacity>
+                </View>
                 <Text style={styles.heroEmoji}>{KOED_EMOJI[opskrift.koed] ?? '🍽️'}</Text>
                 <View style={styles.heroTekst}>
                   <Text style={styles.navnDark}>{opskrift.navn}</Text>
@@ -98,6 +132,7 @@ export default function OpskriftDetaljeModal({ opskrift, butikker, personer, onL
                       {effektiv.pris * gange} kr
                     </Text>
                   )}
+                  <KlokkeKnap label={ing.navn} term={(ing.soeg?.[0]) ?? termFraFritekst(ing.navn)} størrelse={18} />
                 </View>
               );
             })}
@@ -123,20 +158,41 @@ export default function OpskriftDetaljeModal({ opskrift, butikker, personer, onL
         </ScrollView>
 
         {/* Knap */}
-        <View style={styles.bund}>
-          {onTilføj && (
-            <TouchableOpacity
-              style={[styles.tilføjKnap, gemmer && styles.knapDisabled]}
-              onPress={() => onTilføj(opskrift.id)}
-              disabled={gemmer}
-            >
-              {gemmer
-                ? <ActivityIndicator color="#fff" size="small" />
-                : <Text style={styles.tilføjKnapTekst}>Tilføj til indkøbsliste</Text>
-              }
-            </TouchableOpacity>
-          )}
-        </View>
+        {(onLægPåPlan || onTilføj || onRediger || onSlet) && (
+          <View style={styles.bund}>
+            {onLægPåPlan && (
+              <TouchableOpacity style={styles.tilføjKnap} onPress={onLægPåPlan}>
+                <Text style={styles.tilføjKnapTekst}>📅 Læg på madplan</Text>
+              </TouchableOpacity>
+            )}
+            {onTilføj && (
+              <TouchableOpacity
+                style={[styles.tilføjKnap, gemmer && styles.knapDisabled]}
+                onPress={() => onTilføj(opskrift.id)}
+                disabled={gemmer}
+              >
+                {gemmer
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={styles.tilføjKnapTekst}>Tilføj til indkøbsliste</Text>
+                }
+              </TouchableOpacity>
+            )}
+            {(onRediger || onSlet) && (
+              <View style={styles.egenRække}>
+                {onRediger && (
+                  <TouchableOpacity style={[styles.egenKnap, styles.redigerKnap]} onPress={onRediger}>
+                    <Text style={styles.redigerKnapTekst}>Rediger opskrift</Text>
+                  </TouchableOpacity>
+                )}
+                {onSlet && (
+                  <TouchableOpacity style={[styles.egenKnap, styles.sletKnap]} onPress={onSlet}>
+                    <Text style={styles.sletKnapTekst}>Slet</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </View>
+        )}
       </SafeAreaView>
     </Modal>
   );
@@ -163,8 +219,19 @@ const styles = StyleSheet.create({
   },
   heroEmoji: { fontSize: 56, marginBottom: 8 },
   heroTekst: { gap: 2 },
+  heroTop: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  hjerteKnap: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center',
+  },
+  hjerteKnapDark: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: Colors.line, alignItems: 'center', justifyContent: 'center',
+  },
+  hjerteTekst: { fontSize: 17 },
   lukKnap: {
-    alignSelf: 'flex-end',
     width: 32, height: 32, borderRadius: 16,
     backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center',
   },
@@ -218,4 +285,13 @@ const styles = StyleSheet.create({
   },
   knapDisabled: { backgroundColor: Colors.line },
   tilføjKnapTekst: { color: '#fff', fontSize: 15, fontFamily: 'Inter_700Bold' },
+  egenRække: { flexDirection: 'row', gap: 12 },
+  egenKnap: {
+    borderRadius: Radii.btn, padding: 14, alignItems: 'center',
+    borderWidth: 1, backgroundColor: Colors.card,
+  },
+  redigerKnap: { flex: 1, borderColor: Colors.green },
+  redigerKnapTekst: { color: Colors.green, fontSize: 15, fontFamily: 'Inter_700Bold' },
+  sletKnap: { borderColor: Colors.red, paddingHorizontal: 24 },
+  sletKnapTekst: { color: Colors.red, fontSize: 15, fontFamily: 'Inter_700Bold' },
 });
