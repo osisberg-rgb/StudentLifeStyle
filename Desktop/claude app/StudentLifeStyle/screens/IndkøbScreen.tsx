@@ -5,9 +5,14 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Colors, Radii } from '../constants/theme';
 import ButiksPill from '../components/ButiksPill';
+import TilføjVareModal from '../components/TilføjVareModal';
 import { supabase } from '../lib/supabase';
 import { IndkoebsButik, IndkoebsVare } from '../types/madplan';
+import { TilbudsTræf } from '../constants/tilbudSøg';
+import { fletTilbudIListe, fletFriVareIListe } from '../lib/indkøbsliste';
 import { sætValgtUge, hentValgtUge } from '../constants/ugeState';
+import KlokkeKnap from '../components/KlokkeKnap';
+import { hentWatchlist, termFraFritekst } from '../lib/watchlist';
 
 type Vare = IndkoebsVare & { checked?: boolean };
 
@@ -17,9 +22,13 @@ export default function IndkøbScreen() {
   // Uge-vælger: følger den uge man står på i Planer (delt state), så
   // madplan og indkøbsliste altid peger på samme uge
   const [uge, setUge] = useState(() => hentValgtUge(getWeekNumber()));
+  const [tilføjÅben, setTilføjÅben] = useState(false);
   // Planen som den blev hentet — genbruges ved gem, så hvert checkbox-tryk
   // ikke koster et ekstra SELECT-rundtrip. Genindlæses ved hvert fokus.
   const planRef = useRef<any>(null);
+  // Findes der allerede en madplan-række for ugen? Styrer om vi update'r
+  // (normal sti) eller upsert'er (manuel tilføjelse uden genereret plan).
+  const harRækkeRef = useRef(false);
 
   useFocusEffect(useCallback(() => {
     // Følg den delte uge (ændret fra Planer-fanen) — setUge ændrer
@@ -30,6 +39,7 @@ export default function IndkøbScreen() {
       return;
     }
     hentListe(uge);
+    hentWatchlist();   // så 🔔-knapperne viser korrekt tilstand
   }, [uge]));
 
   function skiftUge(retning: number) {
@@ -48,6 +58,7 @@ export default function IndkøbScreen() {
         .maybeSingle();
 
       planRef.current = data?.plan ?? null;
+      harRækkeRef.current = !!data;
       if (data?.plan?.indkoebsliste?.length) {
         const liste: IndkoebsButik[] = data.plan.indkoebsliste.map((s: IndkoebsButik) => ({
           ...s,
@@ -63,12 +74,39 @@ export default function IndkøbScreen() {
   }
 
   async function gemListe(nyeSektioner: IndkoebsButik[]) {
-    if (!planRef.current) return;
-    const nyPlan = { ...planRef.current, indkoebsliste: nyeSektioner };
+    const basis = planRef.current ?? { uge, indkoebsliste: [] };
+    const nyPlan = { ...basis, indkoebsliste: nyeSektioner };
     planRef.current = nyPlan;
-    await supabase.from('madplaner')
-      .update({ plan: nyPlan })
-      .eq('uge_nr', uge);
+
+    if (harRækkeRef.current) {
+      await supabase.from('madplaner').update({ plan: nyPlan }).eq('uge_nr', uge);
+      return;
+    }
+
+    // Ingen plan for ugen endnu — opret en minimal række så man kan handle
+    // manuelt uden først at generere en madplan.
+    const { data: { user: u } } = await supabase.auth.getUser();
+    if (!u) return;
+    await supabase.from('profiles').upsert({ id: u.id }, { onConflict: 'id', ignoreDuplicates: true });
+    const { error } = await supabase.from('madplaner').upsert(
+      { user_id: u.id, uge_nr: uge, plan: nyPlan },
+      { onConflict: 'user_id,uge_nr' }
+    );
+    if (!error) harRækkeRef.current = true;
+  }
+
+  function tilføjVare(træf: TilbudsTræf) {
+    const { liste, tilføjet } = fletTilbudIListe(sektioner, træf);
+    if (!tilføjet) return;
+    setSektioner(liste);
+    gemListe(liste);
+  }
+
+  function tilføjFriVare(navn: string) {
+    const { liste, tilføjet } = fletFriVareIListe(sektioner, navn);
+    if (!tilføjet) return;
+    setSektioner(liste);
+    gemListe(liste);
   }
 
   function toggleHarDet(sI: number, vI: number) {
@@ -115,8 +153,17 @@ export default function IndkøbScreen() {
         <View style={styles.tom}>
           <Text style={styles.tomEmoji}>🛒</Text>
           <Text style={styles.tomTekst}>Ingen liste for uge {uge}</Text>
-          <Text style={styles.tomSub}>Lav en madplan under Planer — ingredienserne tilføjes automatisk</Text>
+          <Text style={styles.tomSub}>Lav en madplan under Planer — eller tilføj tilbud manuelt med +</Text>
         </View>
+        <TouchableOpacity style={styles.fab} onPress={() => setTilføjÅben(true)} activeOpacity={0.85}>
+          <Text style={styles.fabTekst}>+</Text>
+        </TouchableOpacity>
+        <TilføjVareModal
+          synlig={tilføjÅben}
+          onTilføj={tilføjVare}
+          onTilføjFri={tilføjFriVare}
+          onClose={() => setTilføjÅben(false)}
+        />
       </SafeAreaView>
     );
   }
@@ -170,7 +217,9 @@ export default function IndkøbScreen() {
                       </Text>
                       {vare.pakkestoerrelse ? (
                         <Text style={styles.vareMaengde}>
-                          {vare.antal_pakker ?? 1} × {vare.pakkestoerrelse}
+                          {(vare.antal_pakker ?? 1) > 1
+                            ? `${vare.antal_pakker} × ${vare.pakkestoerrelse}`
+                            : vare.pakkestoerrelse}
                         </Text>
                       ) : null}
                       {vare.paa_tilbud && vare.butik && !vare.checked ? (
@@ -183,10 +232,11 @@ export default function IndkøbScreen() {
                       )}
                     </View>
 
-                    {/* Højre: tilbudspris + fjern-knap */}
+                    {/* Højre: tilbudspris + 🔔 + fjern-knap */}
                     {vare.paa_tilbud && !vare.checked && (
                       <Text style={styles.varePrisTilbud}>{vare.pris},-</Text>
                     )}
+                    <KlokkeKnap label={vare.vare} term={termFraFritekst(vare.vare)} størrelse={18} />
                     <TouchableOpacity
                       onPress={() => fjernVare(si, vi)}
                       style={styles.fjernKnap}
@@ -200,8 +250,18 @@ export default function IndkøbScreen() {
             </View>
           );
         })}
-        <View style={{ height: 32 }} />
+        <View style={{ height: 96 }} />
       </ScrollView>
+
+      <TouchableOpacity style={styles.fab} onPress={() => setTilføjÅben(true)} activeOpacity={0.85}>
+        <Text style={styles.fabTekst}>+</Text>
+      </TouchableOpacity>
+      <TilføjVareModal
+        synlig={tilføjÅben}
+        onTilføj={tilføjVare}
+        onTilføjFri={tilføjFriVare}
+        onClose={() => setTilføjÅben(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -217,12 +277,6 @@ function UgeVælger({ uge, onSkift }: { uge: number; onSkift: (retning: number) 
         <Text style={styles.ugeArrow}>›</Text>
       </TouchableOpacity>
     </View>
-  );
-}
-
-function beregnTotal(sektioner: IndkoebsButik[]): number {
-  return sektioner.reduce((acc, s) =>
-    acc + s.varer.reduce((sum, v) => (v as any).checked ? sum : sum + v.pris, 0), 0
   );
 }
 
@@ -284,4 +338,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.line, alignItems: 'center', justifyContent: 'center',
   },
   fjernIkon: { fontSize: 11, color: Colors.inkSoft, fontFamily: 'Inter_700Bold' },
+  fab: {
+    position: 'absolute', right: 20, bottom: 24,
+    width: 58, height: 58, borderRadius: 29, backgroundColor: Colors.blue,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  fabTekst: { fontSize: 30, color: '#fff', fontFamily: 'Inter_700Bold', marginTop: -3 },
 });
