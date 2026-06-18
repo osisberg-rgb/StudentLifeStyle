@@ -1,16 +1,26 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal, View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, SafeAreaView, Image, ImageBackground,
+  TouchableOpacity, SafeAreaView, Image, ImageBackground, Alert, TextInput,
 } from 'react-native';
 import { Colors, Radii } from '../constants/theme';
-import { OPSKRIFTER } from '../constants/opskrifter';
+import { alleOpskrifter, sletBrugerOpskrift } from '../lib/brugerOpskrifter';
 import { hentOpskriftPriser } from '../constants/opskriftPriser';
 import { KATEGORIER, KategoriId } from '../constants/kategorier';
-import { findAnbefaledeRetter, måltiderPrRet, MAKS_RETTER, UGE_MAAL } from '../constants/anbefaling';
-import { hentBillede } from '../constants/opskriftBilleder';
+import { måltiderPrRet, MAKS_RETTER, UGE_MAAL } from '../constants/anbefaling';
+import { billedeFor } from '../constants/opskriftBilleder';
 import { tælTilbudsMatch } from '../constants/tilbudsMatch';
 import ButiksPill from './ButiksPill';
+import ImportOpskriftModal from './ImportOpskriftModal';
+import OpskriftDetaljeModal from './OpskriftDetaljeModal';
+import RedigerOpskriftModal from './RedigerOpskriftModal';
+import TilføjOpskriftSheet, { TilføjMetode } from './TilføjOpskriftSheet';
+import { erFavorit } from '../lib/favoritter';
+import type { Opskrift } from '../types/opskrift';
+
+// Ud over de statiske kategorier kan man filtrere på sine favoritter og
+// sine egne importerede opskrifter
+type Filter = KategoriId | 'favoritter' | 'mine';
 
 const KOED_EMOJI: Record<string, string> = {
   Kylling: '🐔',
@@ -21,21 +31,40 @@ const KOED_EMOJI: Record<string, string> = {
 
 type Props = {
   synlig: boolean;
-  kost: string[];
-  budget: number;
   butikker?: string[];
   personer: number;
   forvalgte?: string[] | null;
   onPersonerChange: (n: number) => void;
   onLuk: () => void;
-  onGenerer: (ids: string[]) => void;
+  // Valgte retter → læg dem på ÉN dag man selv vælger (1 eller flere ad gangen)
+  onVælgEnRet: (ids: string[]) => void;
+  // Sat når vælgeren er åbnet FOR en bestemt dag (via "Byt" eller tryk på dag).
+  // enkeltValg = true ved "byt" (man udskifter præcis én ret); ellers kan man
+  // vælge flere retter til samme dag (fx salat + hovedret + brød).
+  målDag?: { index: number; dagNavn: string; enkeltValg?: boolean } | null;
+  onVælgTilDag?: (ids: string[]) => void;
 };
 
-export default function VælgRetterModal({ synlig, kost, budget, butikker, personer, forvalgte, onPersonerChange, onLuk, onGenerer }: Props) {
+export default function VælgRetterModal({ synlig, butikker, personer, forvalgte, onPersonerChange, onLuk, onVælgEnRet, målDag, onVælgTilDag }: Props) {
+  const dagMode = !!målDag;
+  // Kun "byt"-flowet er enkelt-valg; tilføj-til-dag tillader flere retter
+  const enkeltValg = !!målDag?.enkeltValg;
   const [valgte, setValgte] = useState<string[]>([]);
-  const [anbefaletValgt, setAnbefaletValgt] = useState(false);
-  const [kategori, setKategori] = useState<KategoriId | null>(null);
+  const [kategori, setKategori] = useState<Filter | null>(null);
   const [kunHurtige, setKunHurtige] = useState(false);
+  const [søg, setSøg] = useState('');
+  // "+"-arket (halvskærm, 4 valg) → samme flow som den centrale +-knap
+  const [sheetÅben, setSheetÅben] = useState(false);
+  const [metode, setMetode] = useState<'kamera' | 'galleri' | 'link' | null>(null);
+  const [importÅben, setImportÅben] = useState(false);
+  // Opskrift man kigger ind i (ren visning — uden at vælge den)
+  const [seOpskrift, setSeOpskrift] = useState<Opskrift | null>(null);
+  // Egen opskrift man redigerer i (eller en tom skabelon når man skriver ny ind)
+  const [redigerOpskrift, setRedigerOpskrift] = useState<Opskrift | null>(null);
+  const [erNyOpskrift, setErNyOpskrift] = useState(false);
+  // Bumpes når en opskrift er importeret — tvinger gridet til at gen-læse
+  // alleOpskrifter(), så den nye ret straks dukker op
+  const [, setImportNonce] = useState(0);
 
   // Seed fra onboardingens aha-skærm: samme retter = samme tal som brugeren
   // lige har set. Kører kun når modalen åbner med forvalgte sat.
@@ -45,36 +74,34 @@ export default function VælgRetterModal({ synlig, kost, budget, butikker, perso
     }
   }, [synlig, forvalgte]);
 
-  const valgteKoed = kost.filter(k => ['Kylling', 'Oksekød', 'Svinekød'].includes(k));
-  const vilHaveAlt = kost.includes('Alt') || valgteKoed.length === 0;
-  const tilgængelige = OPSKRIFTER.filter(o =>
-    vilHaveAlt || valgteKoed.includes(o.koed) || o.koed === 'Alt'
-  );
+  // Kostpræferencer er fjernet — vis ALLE opskrifter, filtrér ikke på kødtype.
+  const tilgængelige = alleOpskrifter();
 
   // Forudberegnede priser pr. opskrift (med tilbud fra valgte butikker,
   // skaleret til antal personer) — beregnes én gang og caches
   const retPriser = hentOpskriftPriser(butikker, personer);
 
-  // Kategori- og tidsfilter ovenpå kost-filteret. "Billigt" sorteres efter
-  // aktuel pris (med tilbud), så ugens billigste ligger øverst.
-  const filtrerede = tilgængelige.filter(o =>
-    (!kategori || (o.kategorier as string[] | undefined)?.includes(kategori)) &&
-    (!kunHurtige || ((o as any).minutter ?? 99) <= 30)
-  );
-  const viste = kategori === 'billig'
-    ? [...filtrerede].sort((a, b) =>
-        tælTilbudsMatch(b.id, butikker).antal - tælTilbudsMatch(a.id, butikker).antal
-      )
-    : filtrerede;
+  // Søgning: matcher på rettens navn ELLER en af dens ingredienser
+  const søgQ = søg.trim().toLowerCase();
 
-  // Anbefalingen genberegnes kun når modalen er åben og input ændrer sig
-  const kostNøgle = kost.join(',');
-  const butikNøgle = (butikker ?? []).join(',');
-  const anbefaletIds = useMemo(
-    () => (synlig && filtrerede.length >= 2 ? findAnbefaledeRetter(filtrerede, budget, butikker, personer) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [synlig, kostNøgle, butikNøgle, budget, kategori, personer, kunHurtige]
-  );
+  // Kategori-, søge- og tidsfilter.
+  const filtrerede = tilgængelige.filter(o => {
+    const kat = o.kategorier as string[] | undefined;
+    const matcherKategori = !kategori
+      || (kategori === 'favoritter'
+        ? erFavorit(o.id)
+        : kategori === 'mine'
+          ? !!o.importeret
+          : kategori === 'aftensmad'
+            // Aftensmad = alt der ikke er tagget suppe, salat eller brød
+            ? !(kat?.includes('suppe') || kat?.includes('salat') || kat?.includes('broed') || kat?.includes('dessert'))
+            : kat?.includes(kategori));
+    const matcherSøg = !søgQ
+      || o.navn.toLowerCase().includes(søgQ)
+      || (o.ingredienser ?? []).some((i: any) => (i.navn ?? '').toLowerCase().includes(søgQ));
+    return matcherKategori && matcherSøg && (!kunHurtige || ((o as any).minutter ?? 99) <= 30);
+  });
+  const viste = filtrerede;
 
   // Komponenten er permanent monteret i PlanerScreen og kører ved hvert
   // re-render dér — uden denne guard bygges hele grid'et med alle
@@ -82,37 +109,50 @@ export default function VælgRetterModal({ synlig, kost, budget, butikker, perso
   // (Skal stå EFTER alle hooks — hooks må ikke springes over.)
   if (!synlig) return null;
 
-  function vælgKategori(id: KategoriId | null) {
+  function vælgKategori(id: Filter | null) {
     setKategori(id);
-    setAnbefaletValgt(false);
+  }
+
+  // Et kort er valgt i "+"-arket → åbn det rette flow direkte (samme routing
+  // som den centrale +-knap i App.tsx)
+  function vælgMetode(m: TilføjMetode) {
+    setSheetÅben(false);
+    if (m === 'skriv') {
+      setTimeout(() => {
+        setErNyOpskrift(true);
+        setRedigerOpskrift({
+          id: 'ny', navn: '', koed: 'Alt', portioner: 4,
+          kategorier: [], ingredienser: [], fremgangsmaade: [], importeret: true,
+        });
+      }, 280);
+      return;
+    }
+    setMetode(m);            // 'kamera' | 'galleri' | 'link'
+    // Vent til arket er HELT lukket før import-modalen åbnes — to modaler i
+    // transition samtidig forhindrer billedvælgeren i at præsentere.
+    setTimeout(() => setImportÅben(true), 280);
   }
 
   function toggleRet(id: string) {
-    setAnbefaletValgt(false);
+    // "Byt"-mode: én ret ad gangen — tryk vælger (og afvælger) netop denne
+    if (enkeltValg) {
+      setValgte(prev => (prev[0] === id ? [] : [id]));
+      return;
+    }
     setValgte(prev => {
       if (prev.includes(id)) return prev.filter(x => x !== id);
-      // Stop når ugen er fyldt: enten 7 retter eller 7 dækkede aftensmåltider
-      if (prev.length >= MAKS_RETTER || dækkedeMåltider >= UGE_MAAL) return prev;
+      if (prev.length >= MAKS_RETTER) return prev;
+      // Uge-loftet gælder kun når man bygger på tværs af ugen, ikke for én dag
+      if (!dagMode && dækkedeMåltider >= UGE_MAAL) return prev;
       return [...prev, id];
     });
   }
 
-  function vælgAnbefalet() {
-    if (anbefaletValgt) {
-      // Tryk igen = fortryd anbefalingen
-      setValgte([]);
-      setAnbefaletValgt(false);
-    } else {
-      setValgte(anbefaletIds);
-      setAnbefaletValgt(true);
-    }
-  }
-
-  function håndterGenerer() {
-    if (valgte.length < 2) return;
-    onGenerer(valgte);
+  function håndterBekræft() {
+    if (valgte.length === 0) return;
+    if (dagMode) onVælgTilDag?.(valgte);     // læg de valgte retter på den valgte dag
+    else onVælgEnRet(valgte);                 // 1+ retter → vælg ÉN dag til dem alle
     setValgte([]);
-    setAnbefaletValgt(false);
     setKategori(null);
     setKunHurtige(false);
     onLuk();
@@ -120,27 +160,36 @@ export default function VælgRetterModal({ synlig, kost, budget, butikker, perso
 
   function håndterAnnuller() {
     setValgte([]);
-    setAnbefaletValgt(false);
     setKategori(null);
     setKunHurtige(false);
     onLuk();
   }
 
-  // Valget er altid `valgte` — anbefalingen seeder det bare, så man frit
-  // kan fjerne/udskifte enkelte retter bagefter
+  // Slet en egen (importeret) opskrift — med bekræftelse. Bagefter lukkes
+  // visningen og gridet gen-læser alleOpskrifter().
+  function sletEgenOpskrift(o: Opskrift) {
+    Alert.alert(
+      'Slet opskrift',
+      `Vil du slette "${o.navn}"? Det kan ikke fortrydes.`,
+      [
+        { text: 'Annuller', style: 'cancel' },
+        {
+          text: 'Slet', style: 'destructive', onPress: async () => {
+            const ok = await sletBrugerOpskrift(o.id);
+            if (ok) { setSeOpskrift(null); setImportNonce(n => n + 1); }
+            else Alert.alert('Fejl', 'Kunne ikke slette opskriften. Prøv igen.');
+          },
+        },
+      ],
+    );
+  }
+
   const aktivValgte = valgte;
   // Hvor mange aftensmåltider dækker valget? (rester tæller med)
   const dækkedeMåltider = aktivValgte.reduce((sum, id) => {
     const info = retPriser.get(id);
     return sum + (info ? måltiderPrRet(info.portioner, personer) : 1);
   }, 0);
-  const anbefaletMåltider = anbefaletIds.reduce((sum, id) => {
-    const info = retPriser.get(id);
-    return sum + (info ? måltiderPrRet(info.portioner, personer) : 1);
-  }, 0);
-  const anbefaletTilbud = anbefaletIds.reduce((sum, id) =>
-    sum + tælTilbudsMatch(id, butikker).antal, 0
-  );
 
   return (
     <Modal visible={synlig} animationType="slide" presentationStyle="pageSheet">
@@ -150,8 +199,32 @@ export default function VælgRetterModal({ synlig, kost, budget, butikker, perso
           <TouchableOpacity onPress={håndterAnnuller}>
             <Text style={styles.annuller}>Annuller</Text>
           </TouchableOpacity>
-          <Text style={styles.titel}>Vælg retter</Text>
-          <Text style={styles.tæller}>{dækkedeMåltider}/{UGE_MAAL} måltider</Text>
+          <Text style={styles.titel}>{dagMode ? 'Vælg ret' : 'Vælg retter'}</Text>
+          <Text style={styles.tæller} numberOfLines={1}>
+            {dagMode ? `Til ${målDag!.dagNavn}` : ''}
+          </Text>
+        </View>
+
+        {/* Søgefelt */}
+        <View style={styles.søgRække}>
+          <View style={styles.søgFelt}>
+            <Text style={styles.søgIkon}>🔍</Text>
+            <TextInput
+              style={styles.søgInput}
+              value={søg}
+              onChangeText={setSøg}
+              placeholder="Søg efter ret eller råvare…"
+              placeholderTextColor={Colors.inkSoft}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {søg.length > 0 && (
+              <TouchableOpacity onPress={() => setSøg('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.søgRyd}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* Antal personer + tidsfilter */}
@@ -197,6 +270,18 @@ export default function VælgRetterModal({ synlig, kost, budget, butikker, perso
             >
               <Text style={[styles.chipTekst, !kategori && styles.chipTekstAktiv]}>Alle</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.chip, kategori === 'favoritter' && styles.chipAktiv]}
+              onPress={() => vælgKategori(kategori === 'favoritter' ? null : 'favoritter')}
+            >
+              <Text style={[styles.chipTekst, kategori === 'favoritter' && styles.chipTekstAktiv]}>❤️ Favoritter</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.chip, kategori === 'mine' && styles.chipAktiv]}
+              onPress={() => vælgKategori(kategori === 'mine' ? null : 'mine')}
+            >
+              <Text style={[styles.chipTekst, kategori === 'mine' && styles.chipTekstAktiv]}>🔗 Dine opskrifter</Text>
+            </TouchableOpacity>
             {KATEGORIER.map(k => (
               <TouchableOpacity
                 key={k.id}
@@ -212,55 +297,40 @@ export default function VælgRetterModal({ synlig, kost, budget, butikker, perso
         </View>
 
         <ScrollView contentContainerStyle={styles.indhold} showsVerticalScrollIndicator={false}>
-          {/* Anbefalet banner — kun når der er nok retter at anbefale ud fra */}
-          {filtrerede.length >= 2 && (
-            <>
-              <TouchableOpacity
-                style={[styles.anbefaletBanner, anbefaletValgt && styles.anbefaletBannerValgt]}
-                onPress={vælgAnbefalet}
-                activeOpacity={0.8}
-              >
-                <View style={styles.anbefaletVenstre}>
-                  <Text style={styles.anbefaletEmoji}>✨</Text>
-                  <View>
-                    <Text style={[styles.anbefaletTitel, anbefaletValgt && styles.anbefaletTitelValgt]}>
-                      {kategori
-                        ? `Anbefalet · ${KATEGORIER.find(k => k.id === kategori)?.navn}`
-                        : 'Anbefalet ud fra dit budget'}
-                    </Text>
-                    <Text style={[styles.anbefaletSub, anbefaletValgt && styles.anbefaletSubValgt]}>
-                      {anbefaletIds.length} retter · {anbefaletMåltider} måltider{anbefaletTilbud > 0 ? ` · 🏷 ${anbefaletTilbud} tilbuds-varer` : ''}
-                    </Text>
-                  </View>
-                </View>
-                <View style={[styles.anbefaletCheck, anbefaletValgt && styles.anbefaletCheckValgt]}>
-                  {anbefaletValgt
-                    ? <Text style={styles.checkMærke}>✓</Text>
-                    : <Text style={styles.anbefaletPil}>›</Text>
-                  }
-                </View>
-              </TouchableOpacity>
-
-              <View style={styles.divider}>
-                <View style={styles.dividerLinje} />
-                <Text style={styles.dividerTekst}>eller vælg selv</Text>
-                <View style={styles.dividerLinje} />
-              </View>
-            </>
-          )}
-
           {/* Tom kategori */}
           {viste.length === 0 && (
             <View style={styles.tomKategori}>
-              <Text style={styles.tomKategoriEmoji}>🔍</Text>
+              <Text style={styles.tomKategoriEmoji}>
+                {kategori === 'favoritter' ? '🤍' : kategori === 'mine' ? '🔗' : '🔍'}
+              </Text>
               <Text style={styles.tomKategoriTekst}>
-                Ingen retter i denne kategori med dit kost-valg
+                {søgQ
+                  ? `Ingen retter matcher "${søg.trim()}"`
+                  : kategori === 'favoritter'
+                    ? 'Ingen favoritter endnu — åbn en opskrift og tryk på hjertet ❤️'
+                    : kategori === 'mine'
+                      ? 'Du har ingen egne opskrifter endnu — tryk "+ Tilføj opskrift" øverst'
+                      : 'Ingen retter i denne kategori endnu'}
               </Text>
             </View>
           )}
 
           {/* Grid af opskrifter */}
           <View style={styles.grid}>
+            {/* Indsæt egen opskrift — som et kort i grid'et */}
+            {!dagMode && (
+              <TouchableOpacity
+                style={styles.importKort}
+                onPress={() => setSheetÅben(true)}
+                activeOpacity={0.85}
+              >
+                <View style={styles.importIkon}>
+                  <Text style={styles.importIkonTekst}>+</Text>
+                </View>
+                <Text style={styles.importTitel}>Tilføj opskrift</Text>
+                <Text style={styles.importSub}>Foto, screenshot, link eller skriv selv</Text>
+              </TouchableOpacity>
+            )}
             {viste.map(o => {
               const erValgt = aktivValgte.includes(o.id);
               const info = retPriser.get(o.id);
@@ -268,7 +338,7 @@ export default function VælgRetterModal({ synlig, kost, budget, butikker, perso
                 (aktivValgte.length < MAKS_RETTER && dækkedeMåltider < UGE_MAAL);
               const aftener = info ? måltiderPrRet(info.portioner, personer) : 1;
 
-              const billede = hentBillede(o.id);
+              const billede = billedeFor(o);
               const tilbudsMatch = tælTilbudsMatch(o.id, butikker);
               const tilbudBadge = tilbudsMatch.antal > 0 ? (
                 <View style={styles.tilbudBadge}>
@@ -281,7 +351,12 @@ export default function VælgRetterModal({ synlig, kost, budget, butikker, perso
                 </View>
               ) : null;
               return (
-                <View key={o.id} style={[styles.kort, erValgt && styles.kortValgt]}>
+                <TouchableOpacity
+                  key={o.id}
+                  style={[styles.kort, erValgt && styles.kortValgt]}
+                  activeOpacity={0.85}
+                  onPress={() => setSeOpskrift(o)}
+                >
                   {/* Billede eller emoji baggrund */}
                   {billede ? (
                     <ImageBackground
@@ -330,7 +405,7 @@ export default function VælgRetterModal({ synlig, kost, budget, butikker, perso
                       )}
                     </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -338,25 +413,70 @@ export default function VælgRetterModal({ synlig, kost, budget, butikker, perso
 
         {/* Bund med total + knap */}
         <View style={styles.bund}>
-          {aktivValgte.length > 0 && (
+          {!enkeltValg && aktivValgte.length > 1 && (
             <View style={styles.totalRække}>
               <Text style={styles.totalLabel}>
-                {aktivValgte.length} retter · dækker {dækkedeMåltider} aftensmåltider
+                {aktivValgte.length} retter · lægges på samme dag
               </Text>
             </View>
           )}
           <TouchableOpacity
-            style={[styles.genererKnap, aktivValgte.length < 2 && styles.genererKnapDisabled]}
-            onPress={håndterGenerer}
-            disabled={aktivValgte.length < 2}
+            style={[styles.genererKnap, aktivValgte.length < 1 && styles.genererKnapDisabled]}
+            onPress={håndterBekræft}
+            disabled={aktivValgte.length < 1}
           >
             <Text style={styles.genererKnapTekst}>
-              {aktivValgte.length < 2
-                ? 'Vælg mindst 2 retter'
-                : `Generer madplan`}
+              {dagMode
+                ? (aktivValgte.length < 1 ? 'Vælg en ret' : `Læg på ${målDag!.dagNavn}`)
+                : aktivValgte.length < 1
+                  ? 'Vælg mindst 1 ret'
+                  : 'Vælg dag'}
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Halvskærms-ark — vælg HVORDAN (foto/screenshot/link/skriv selv) */}
+        <TilføjOpskriftSheet
+          synlig={sheetÅben}
+          onVælg={vælgMetode}
+          onLuk={() => setSheetÅben(false)}
+        />
+
+        <ImportOpskriftModal
+          synlig={importÅben}
+          butikker={butikker}
+          metode={metode}
+          onLuk={() => { setImportÅben(false); setMetode(null); }}
+          onGemt={() => { setImportÅben(false); setMetode(null); setImportNonce(n => n + 1); }}
+          onSkrivSelv={() => {
+            setImportÅben(false);
+            setMetode(null);
+            setErNyOpskrift(true);
+            setRedigerOpskrift({
+              id: 'ny', navn: '', koed: 'Alt', portioner: 4,
+              kategorier: [], ingredienser: [], fremgangsmaade: [], importeret: true,
+            });
+          }}
+        />
+
+        {/* Ren visning af en opskrift — uden onTilføj vises ingen "tilføj"-knap.
+            Egne (importerede) opskrifter får en "Slet opskrift"-knap. */}
+        <OpskriftDetaljeModal
+          opskrift={seOpskrift}
+          butikker={butikker}
+          personer={personer}
+          onLuk={() => setSeOpskrift(null)}
+          onRediger={seOpskrift?.importeret ? () => { const o = seOpskrift; setSeOpskrift(null); setErNyOpskrift(false); setRedigerOpskrift(o); } : undefined}
+          onSlet={seOpskrift?.importeret ? () => sletEgenOpskrift(seOpskrift) : undefined}
+        />
+
+        {/* Rediger egen opskrift / skriv en ny ind — gen-læs grid + luk ved gemt */}
+        <RedigerOpskriftModal
+          opskrift={redigerOpskrift}
+          erNy={erNyOpskrift}
+          onLuk={() => { setRedigerOpskrift(null); setErNyOpskrift(false); }}
+          onGemt={() => { setRedigerOpskrift(null); setErNyOpskrift(false); setImportNonce(n => n + 1); }}
+        />
       </SafeAreaView>
     </Modal>
   );
@@ -373,6 +493,20 @@ const styles = StyleSheet.create({
   titel: { fontSize: 17, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.ink },
   tæller: { fontSize: 15, fontFamily: 'Inter_700Bold', color: Colors.green, minWidth: 70, textAlign: 'right' },
   indhold: { padding: 16, paddingBottom: 16 },
+
+  søgRække: {
+    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4,
+    backgroundColor: Colors.paper,
+  },
+  søgFelt: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.card, borderRadius: Radii.btn,
+    borderWidth: 1, borderColor: Colors.line,
+    paddingHorizontal: 12, paddingVertical: 10,
+  },
+  søgIkon: { fontSize: 15 },
+  søgInput: { flex: 1, fontSize: 15, fontFamily: 'Inter_400Regular', color: Colors.ink, padding: 0 },
+  søgRyd: { fontSize: 14, color: Colors.inkSoft, fontFamily: 'Inter_600SemiBold', paddingHorizontal: 2 },
 
   personerRække: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -428,30 +562,20 @@ const styles = StyleSheet.create({
     textAlign: 'center', lineHeight: 20,
   },
 
-  anbefaletBanner: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: Colors.greenSoft, borderRadius: Radii.card,
-    borderWidth: 1.5, borderColor: Colors.green, padding: 16, marginBottom: 16,
-  },
-  anbefaletBannerValgt: { backgroundColor: Colors.green },
-  anbefaletVenstre: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  anbefaletEmoji: { fontSize: 26 },
-  anbefaletTitel: { fontSize: 15, fontFamily: 'Inter_700Bold', color: Colors.green },
-  anbefaletTitelValgt: { color: '#fff' },
-  anbefaletSub: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, marginTop: 2 },
-  anbefaletSubValgt: { color: 'rgba(255,255,255,0.8)' },
-  anbefaletCheck: {
-    width: 28, height: 28, borderRadius: 14,
-    borderWidth: 1.5, borderColor: Colors.green,
+  importKort: {
+    width: '47.5%', minHeight: 160,
+    backgroundColor: Colors.card, borderRadius: Radii.card,
+    borderWidth: 1, borderColor: Colors.green, borderStyle: 'dashed',
     alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 24, paddingHorizontal: 12,
   },
-  anbefaletCheckValgt: { backgroundColor: 'rgba(255,255,255,0.3)', borderColor: 'transparent' },
-  checkMærke: { color: '#fff', fontSize: 14, fontFamily: 'Inter_700Bold' },
-  anbefaletPil: { fontSize: 18, color: Colors.green, fontFamily: 'Inter_700Bold' },
-
-  divider: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
-  dividerLinje: { flex: 1, height: 1, backgroundColor: Colors.line },
-  dividerTekst: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.inkSoft },
+  importIkon: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.greenSoft,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 10,
+  },
+  importIkonTekst: { fontSize: 22, color: Colors.green, fontFamily: 'Inter_700Bold' },
+  importTitel: { fontSize: 13, fontFamily: 'Inter_700Bold', color: Colors.green, textAlign: 'center' },
+  importSub: { fontSize: 11, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, marginTop: 4, textAlign: 'center' },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   kort: {

@@ -1,33 +1,34 @@
-// Onboarding i 6 trin — brugerens FØRSTE møde med appen.
-// Princip: under 60 sekunder, og beviset kommer FØR indsatsen — flowet
-// slutter i et ÆGTE besparelses-tal beregnet lokalt med samme motor som
-// resten af appen (findAnbefaledeRetter), aldrig et marketing-tal.
-import React, { useMemo, useState } from 'react';
+// Onboarding — brugerens FØRSTE møde med appen. Rejsen er bygget om kring den
+// nye niche (familier der gemmer opskrifter): hvert trin er en lille
+// INVESTERING (navn → husstand → butikker → favoritter), så brugeren bygger
+// noget der er deres eget (IKEA-effekten). Vi slutter ikke i et besparelses-tal,
+// men i DERES egen samling af favoritter — som straks fylder forsiden.
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput, SafeAreaView,
-  KeyboardAvoidingView, Platform, ScrollView,
+  KeyboardAvoidingView, Platform, ScrollView, ImageBackground,
 } from 'react-native';
 import { Colors, Radii } from '../constants/theme';
 import { StoreColors } from '../constants/theme';
 import { supabase } from '../lib/supabase';
 import { OPSKRIFTER } from '../constants/opskrifter';
-import { findAnbefaledeRetter, måltiderPrRet } from '../constants/anbefaling';
-import { hentOpskriftPriser } from '../constants/opskriftPriser';
+import { billedeFor } from '../constants/opskriftBilleder';
+import { sætFavorit } from '../lib/favoritter';
 import { sætForvalgteRetter } from '../constants/onboardingHandoff';
-import { formatKr } from '../constants/besparelse';
 
-// Samme butiksliste som ProfilScreen — onboardingens svar skal kunne
-// genfindes og ændres dér
-const BUTIKKER = ['Netto', 'Rema 1000', 'Lidl', '365discount', 'Føtex', 'SuperBrugsen', 'Kvikly', 'Bilka'];
+// Samme butiksliste som ProfilScreen — onboardingens svar genfindes/ændres dér
+const BUTIKKER = ['Netto', 'Rema 1000', 'Føtex', 'SuperBrugsen', 'Bilka'];
 
-// SKAL matche motorens kost-model (opskrifternes koed-felt) — de gamle
-// muligheder (Vegetar/Vegansk/Glutenfri) fandtes ikke i motoren
-const KOST_VALG: { label: string; ikon: string }[] = [
-  { label: 'Alt',      ikon: '🍽️' },
-  { label: 'Kylling',  ikon: '🍗' },
-  { label: 'Oksekød',  ikon: '🥩' },
-  { label: 'Svinekød', ikon: '🐷' },
-];
+const KOED_EMOJI: Record<string, string> = {
+  Kylling: '🐔', Oksekød: '🥩', Svinekød: '🐷', Alt: '🍽️',
+};
+
+// Retter man kan vælge som favoritter i onboardingen — hovedretterne
+// (alt der ikke er tagget suppe/salat/brød/dessert).
+const FAVORIT_VALG = OPSKRIFTER.filter(o => {
+  const kat = (o as any).kategorier as string[] | undefined;
+  return !(kat?.includes('suppe') || kat?.includes('salat') || kat?.includes('broed') || kat?.includes('dessert'));
+});
 
 const SPOERGSMAALS_TRIN = 5; // trin 1-5 har progress-bar (velkomst har ikke)
 
@@ -38,49 +39,20 @@ export default function OnboardingScreen({ onDone }: Props) {
   const [fornavn, setFornavn] = useState('');
   const [personer, setPersoner] = useState(4);
   const [butikker, setButikker] = useState<string[]>(['Netto', 'Rema 1000']);
-  const [kost, setKost] = useState<string[]>(['Alt']);
+  const [favoritter, setFavoritter] = useState<string[]>([]);
   const [gemmer, setGemmer] = useState(false);
-
-  // Budget er bevidst IKKE et spørgsmål (tre spørgsmål, ikke fire) —
-  // sættes automatisk ud fra husstanden og kan justeres i Profil
-  const budget = Math.max(100, Math.round((personer * 90) / 50) * 50);
-
-  // Aha-tallet: ægte anbefaling med ugens tilbud, skaleret til husstanden.
-  // Beregnes lokalt og øjeblikkeligt — intet server-kald.
-  const aha = useMemo(() => {
-    if (trin !== 5) return null;
-    const valgteKoed = kost.filter(k => ['Kylling', 'Oksekød', 'Svinekød'].includes(k));
-    const vilHaveAlt = kost.includes('Alt') || valgteKoed.length === 0;
-    const tilgængelige = OPSKRIFTER.filter(o =>
-      vilHaveAlt || valgteKoed.includes(o.koed) || o.koed === 'Alt'
-    );
-    const ids = findAnbefaledeRetter(tilgængelige, budget, butikker, personer);
-    const priser = hentOpskriftPriser(butikker, personer);
-    let pris = 0, spar = 0, måltider = 0;
-    const navne: string[] = [];
-    for (const id of ids) {
-      const info = priser.get(id);
-      pris += info?.pris ?? 0;
-      spar += info?.besparelse ?? 0;
-      måltider += info ? måltiderPrRet(info.portioner, personer) : 1;
-      const o = OPSKRIFTER.find(x => x.id === id);
-      if (o) navne.push(o.navn);
-    }
-    return { ids, navne, pris: Math.round(pris), spar: Math.round(spar), måltider };
-  }, [trin, kost, butikker, personer, budget]);
 
   function toggleButik(b: string) {
     setButikker(prev => prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b]);
   }
-
-  function toggleKost(k: string) {
-    if (k === 'Alt') { setKost(['Alt']); return; }
-    setKost(prev => {
-      const uden = prev.filter(x => x !== 'Alt');
-      const ny = uden.includes(k) ? uden.filter(x => x !== k) : [...uden, k];
-      return ny.length === 0 ? ['Alt'] : ny;
-    });
+  function toggleFavorit(id: string) {
+    setFavoritter(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
+
+  // Navne på de valgte favoritter (til payoff-trinnet)
+  const favoritNavne = favoritter
+    .map(id => OPSKRIFTER.find(o => o.id === id)?.navn)
+    .filter((n): n is string => !!n);
 
   async function færdig() {
     setGemmer(true);
@@ -89,29 +61,32 @@ export default function OnboardingScreen({ onDone }: Props) {
       if (user) {
         await supabase.from('profiles').upsert({
           id: user.id,
-          budget_per_week: budget,
           household_size: personer,
-          diet: kost,
           stores: butikker,
         });
-        // display_name i separat kald — kolonnen kræver SQL i dashboardet
-        // (alter table profiles add column display_name text;) og må aldrig
-        // kunne vælte gemningen af kerne-felterne ovenfor
+        // display_name i separat kald — kolonnen kræver SQL i dashboardet og
+        // må aldrig kunne vælte gemningen af kerne-felterne ovenfor
         const navn = fornavn.trim();
         if (navn) {
           await supabase.from('profiles').update({ display_name: navn }).eq('id', user.id);
         }
+        // Gem favoritterne, så de straks står på forsidens favorit-stribe
+        for (const id of favoritter) {
+          await sætFavorit(id, true);
+        }
       }
     } catch (_) {}
-    // Aha-tallet skal holde: Planer-fanen åbner vælgeren med præcis
-    // de samme retter præ-valgt
-    if (aha && aha.ids.length >= 2) sætForvalgteRetter(aha.ids);
+    // Seed Planer-vælgeren med favoritterne, så første madplan bygges af
+    // præcis det brugeren lige har valgt
+    if (favoritter.length >= 2) sætForvalgteRetter(favoritter);
     setGemmer(false);
     onDone();
   }
 
   const kanVidere =
-    trin === 3 ? butikker.length > 0 : true;
+    trin === 3 ? butikker.length > 0 :
+    trin === 4 ? favoritter.length > 0 :
+    true;
 
   return (
     <SafeAreaView style={styles.root}>
@@ -120,7 +95,7 @@ export default function OnboardingScreen({ onDone }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          {/* Ægte progress — fyldes trin for trin (skjult på velkomsten) */}
+          {/* Progress — fyldes trin for trin (skjult på velkomsten) */}
           {trin > 0 && (
             <View style={styles.progress}>
               {Array.from({ length: SPOERGSMAALS_TRIN }).map((_, i) => (
@@ -134,12 +109,13 @@ export default function OnboardingScreen({ onDone }: Props) {
               <Text style={styles.logo}>Mæt<Text style={{ color: Colors.red }}>.</Text></Text>
               <Text style={styles.titel}>Velkommen 👋</Text>
               <Text style={styles.broedtekst}>
-                Familier som jeres sparer typisk 400-700 kr om måneden på aftensmaden.
+                Saml familiens yndlingsopskrifter ét sted, planlæg ugens aftensmad,
+                og lad os finde ugens tilbud på ingredienserne.
               </Text>
               <View style={styles.punktListe}>
-                <Punkt emoji="🍽️" tekst="Vælg ugens aftensmad blandt vores opskrifter" />
-                <Punkt emoji="🛒" tekst="Få indkøbslisten — med ugens tilbud regnet ind" />
-                <Punkt emoji="💰" tekst="Se hvad I sparer, uge for uge" />
+                <Punkt emoji="❤️" tekst="Gem jeres favoritopskrifter — eller indsæt jeres egne" />
+                <Punkt emoji="🍽️" tekst="Byg ugens madplan på få tryk" />
+                <Punkt emoji="🛒" tekst="Få indkøbslisten med ugens tilbud regnet ind" />
               </View>
             </>
           )}
@@ -224,55 +200,63 @@ export default function OnboardingScreen({ onDone }: Props) {
 
           {trin === 4 && (
             <>
-              <Text style={styles.titel}>Hvad spiser I derhjemme?</Text>
-              {KOST_VALG.map(k => {
-                const aktiv = kost.includes(k.label);
-                return (
-                  <TouchableOpacity
-                    key={k.label}
-                    style={[styles.kostRække, aktiv && styles.kostRækkeAktiv]}
-                    onPress={() => toggleKost(k.label)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.kostIkon}>{k.ikon}</Text>
-                    <Text style={[styles.kostLabel, aktiv && { color: Colors.green }]}>{k.label}</Text>
-                    <View style={[styles.kostCheck, aktiv && styles.kostCheckAktiv]}>
-                      {aktiv && <Text style={styles.kostCheckmark}>✓</Text>}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+              <Text style={styles.titel}>Vælg et par favoritter ❤️</Text>
+              <Text style={styles.broedtekstSmal}>
+                Tryk på de retter I godt kan lide — de samles på din forside, og vi
+                bygger din første madplan ud fra dem.
+              </Text>
+              <View style={styles.favGrid}>
+                {FAVORIT_VALG.map(o => {
+                  const valgt = favoritter.includes(o.id);
+                  const billede = billedeFor(o);
+                  return (
+                    <TouchableOpacity
+                      key={o.id}
+                      style={[styles.favKort, valgt && styles.favKortValgt]}
+                      activeOpacity={0.85}
+                      onPress={() => toggleFavorit(o.id)}
+                    >
+                      {billede ? (
+                        <ImageBackground source={billede} style={styles.favBillede} imageStyle={styles.favBilledeImg}>
+                          <View style={[styles.favHjerte, valgt && styles.favHjerteAktiv]}>
+                            <Text style={styles.favHjerteTekst}>{valgt ? '❤️' : '🤍'}</Text>
+                          </View>
+                        </ImageBackground>
+                      ) : (
+                        <View style={[styles.favBillede, styles.favFallback]}>
+                          <Text style={{ fontSize: 34 }}>{KOED_EMOJI[o.koed] ?? '🍽️'}</Text>
+                          <View style={[styles.favHjerte, valgt && styles.favHjerteAktiv]}>
+                            <Text style={styles.favHjerteTekst}>{valgt ? '❤️' : '🤍'}</Text>
+                          </View>
+                        </View>
+                      )}
+                      <Text style={styles.favNavn} numberOfLines={2}>{o.navn}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </>
           )}
 
-          {trin === 5 && aha && (
+          {trin === 5 && (
             <>
               <Text style={styles.titel}>
-                Jeres første uge er klar{fornavn.trim() ? `, ${fornavn.trim()}` : ''}
+                Din samling er klar{fornavn.trim() ? `, ${fornavn.trim()}` : ''}
               </Text>
               <View style={styles.ahaKort}>
-                {aha.spar > 0 ? (
-                  <>
-                    <Text style={styles.ahaLabel}>I kan spare</Text>
-                    <Text style={styles.ahaTal}>{formatKr(aha.spar)} kr</Text>
-                    <Text style={styles.ahaSub}>
-                      i denne uge · {aha.måltider} aftensmåltider · ca. {formatKr(aha.pris)} kr
-                    </Text>
-                  </>
-                ) : (
-                  /* Aldrig "spar 0 kr" i første minut — vis værdien uden tilbuds-vinklen */
-                  <>
-                    <Text style={styles.ahaLabel}>Jeres uge er klar</Text>
-                    <Text style={styles.ahaTal}>{aha.måltider} aftensmåltider</Text>
-                    <Text style={styles.ahaSub}>for ca. {formatKr(aha.pris)} kr til {personer} personer</Text>
-                  </>
-                )}
+                <Text style={styles.ahaLabel}>Du har gemt</Text>
+                <Text style={styles.ahaTal}>{favoritter.length} {favoritter.length === 1 ? 'favorit' : 'favoritter'}</Text>
+                <Text style={styles.ahaSub}>
+                  De står klar på din forside — og vi finder ugens tilbud på ingredienserne.
+                </Text>
               </View>
-              <Text style={styles.ahaRetter} numberOfLines={3}>
-                Blandt andet: {aha.navne.slice(0, 3).join(' · ')}
-              </Text>
+              {favoritNavne.length > 0 && (
+                <Text style={styles.ahaRetter} numberOfLines={3}>
+                  {favoritNavne.slice(0, 4).join(' · ')}
+                </Text>
+              )}
               <Text style={styles.hjælpetekst}>
-                Budgettet er sat til {budget} kr/uge — du kan altid justere det i Profil.
+                Du kan altid tilføje flere — eller indsætte dine egne opskrifter fra et link eller billede.
               </Text>
             </>
           )}
@@ -301,9 +285,10 @@ export default function OnboardingScreen({ onDone }: Props) {
               disabled={!kanVidere || gemmer}
             >
               <Text style={styles.btnText}>
-                {trin === 0 ? 'Sæt os op — under 1 minut'
+                {trin === 0 ? 'Kom godt i gang — under 1 minut'
+                  : trin === 4 ? (favoritter.length > 0 ? `Videre (${favoritter.length} valgt)` : 'Vælg mindst én')
                   : trin < 5 ? 'Videre'
-                  : 'Se jeres madplan'}
+                  : 'Kom i gang'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -340,6 +325,10 @@ const styles = StyleSheet.create({
   broedtekst: {
     fontSize: 15, fontFamily: 'Inter_400Regular', color: Colors.inkSoft,
     lineHeight: 22, marginBottom: 28,
+  },
+  broedtekstSmal: {
+    fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.inkSoft,
+    lineHeight: 20, marginBottom: 18,
   },
   punktListe: { gap: 16 },
   punkt: { flexDirection: 'row', alignItems: 'center', gap: 14 },
@@ -380,22 +369,27 @@ const styles = StyleSheet.create({
   },
   butikChipTekst: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.inkSoft },
 
-  kostRække: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: Colors.card, borderRadius: Radii.card,
-    borderWidth: 1.5, borderColor: Colors.line,
-    padding: 16, marginBottom: 10,
+  // Favorit-grid (trin 4)
+  favGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
+  favKort: {
+    width: '47.5%', backgroundColor: Colors.card, borderRadius: Radii.card,
+    borderWidth: 1.5, borderColor: Colors.line, overflow: 'hidden', marginBottom: 4,
   },
-  kostRækkeAktiv: { borderColor: Colors.green, backgroundColor: Colors.greenSoft },
-  kostIkon: { fontSize: 24, marginRight: 14 },
-  kostLabel: { flex: 1, fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.ink },
-  kostCheck: {
-    width: 24, height: 24, borderRadius: 12,
-    borderWidth: 1.5, borderColor: Colors.line,
+  favKortValgt: { borderColor: Colors.green },
+  favBillede: { height: 90, backgroundColor: Colors.canvas, justifyContent: 'flex-start' },
+  favBilledeImg: { borderTopLeftRadius: Radii.card, borderTopRightRadius: Radii.card },
+  favFallback: { backgroundColor: Colors.greenSoft, alignItems: 'center', justifyContent: 'center' },
+  favHjerte: {
+    position: 'absolute', top: 6, right: 6,
+    width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.9)',
     alignItems: 'center', justifyContent: 'center',
   },
-  kostCheckAktiv: { backgroundColor: Colors.greenBright, borderColor: Colors.greenBright },
-  kostCheckmark: { color: '#fff', fontSize: 13, fontFamily: 'Inter_700Bold' },
+  favHjerteAktiv: { backgroundColor: '#fff' },
+  favHjerteTekst: { fontSize: 14 },
+  favNavn: {
+    fontSize: 12, fontFamily: 'Inter_600SemiBold', color: Colors.ink,
+    paddingHorizontal: 10, paddingVertical: 8, lineHeight: 16,
+  },
 
   ahaKort: {
     backgroundColor: Colors.green, borderRadius: Radii.hero,
@@ -406,7 +400,7 @@ const styles = StyleSheet.create({
     fontSize: 40, fontFamily: 'BricolageGrotesque_800ExtraBold', color: Colors.yellow,
     letterSpacing: -0.8, marginVertical: 4,
   },
-  ahaSub: { fontSize: 13, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.75)', textAlign: 'center' },
+  ahaSub: { fontSize: 13, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.8)', textAlign: 'center', lineHeight: 19 },
   ahaRetter: {
     fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.ink,
     lineHeight: 19, marginTop: 16,

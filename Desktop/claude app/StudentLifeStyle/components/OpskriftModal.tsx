@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal, View, Text, StyleSheet, ScrollView, TouchableOpacity,
   SafeAreaView, Alert,
@@ -6,7 +6,9 @@ import {
 import { Colors, Radii } from '../constants/theme';
 import ButiksPill from './ButiksPill';
 import { supabase } from '../lib/supabase';
-import { Maltid } from '../types/madplan';
+import { fletVareIListe } from '../lib/indkøbsliste';
+import { pakkeTekst } from '../constants/indkoeb';
+import { Maltid, IndkoebsButik, IndkoebsVare } from '../types/madplan';
 
 const MALTID_IKONER: Record<string, string> = {
   morgenmad: '🌅', frokost: '🥙', aftensmad: '🍽️',
@@ -23,6 +25,10 @@ type Props = {
 export default function OpskriftModal({ maltid, maltidType, dagNavn, ugeNr, onClose }: Props) {
   const [tilføjet, setTilføjet] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Nulstil "tilføjet" hver gang en ret åbnes (også samme ret igen), så man
+  // altid kan tilføje til indkøbslisten på ny.
+  useEffect(() => { setTilføjet(false); setLoading(false); }, [maltid]);
 
   if (!maltid) return null;
   const safeMaltid = maltid;
@@ -48,33 +54,22 @@ export default function OpskriftModal({ maltid, maltidType, dagNavn, ugeNr, onCl
 
       const plan = row.plan;
 
-      // Hent eksisterende indkøbsliste (ny format: array af { butik, subtotal, varer })
-      const eksisterende: any[] = plan.indkoebsliste ?? [];
-
-      // Tilføj ingredienser til den rigtige butiksektion
-      const opdateretListe = [...eksisterende];
+      // Tilføj ALLE rettens ingredienser — grupperet pr. kategori (samme model
+      // som resten af indkøbslisten). Varer der ikke er på tilbud har ingen
+      // butik, men kommer stadig med; tilbudsvarer beholder deres butiks-badge.
+      let opdateretListe: IndkoebsButik[] = plan.indkoebsliste ?? [];
       for (const ing of safeMaltid.ingredienser ?? []) {
-        if (!ing.butik) continue;
-        const sektion = opdateretListe.find(s => s.butik === ing.butik);
-        const nyVare = {
+        const nyVare: IndkoebsVare = {
           vare: ing.vare,
           antal_pakker: 1,
-          pakkestoerrelse: ing.pakkestoerrelse ?? '',
+          pakkestoerrelse: pakkeTekst(ing.vare, ing.pakkestoerrelse ?? ''),
           pris: ing.pakkepris,
+          normalpris: ing.normalpris,
           paa_tilbud: ing.paa_tilbud,
+          butik: ing.butik,
           checked: false,
         };
-        if (sektion) {
-          const findsDuplikat = sektion.varer.some(
-            (v: any) => v.vare.toLowerCase() === ing.vare.toLowerCase()
-          );
-          if (!findsDuplikat) {
-            sektion.varer.push(nyVare);
-            sektion.subtotal = (sektion.subtotal ?? 0) + ing.pakkepris;
-          }
-        } else {
-          opdateretListe.push({ butik: ing.butik, subtotal: ing.pakkepris, varer: [nyVare] });
-        }
+        opdateretListe = fletVareIListe(opdateretListe, nyVare).liste;
       }
 
       const opdateretPlan = { ...plan, indkoebsliste: opdateretListe };
@@ -117,16 +112,10 @@ export default function OpskriftModal({ maltid, maltidType, dagNavn, ugeNr, onCl
                 <Text style={styles.resterTekst}>Rester fra {maltid.rester_fra}</Text>
               </View>
             )}
-            <Text style={styles.pris}>
-              {erRester ? 'Gratis – rester fra aftensmad' : `${maltid.pris_pr_portion} kr pr. portion`}
-            </Text>
             {!erRester && (safeMaltid.portioner ?? 0) > 0 && (
               <View style={styles.portionerRad}>
                 <View style={styles.portionerBadge}>
                   <Text style={styles.portionerTekst}>🍽 {safeMaltid.portioner} portion{safeMaltid.portioner !== 1 ? 'er' : ''}</Text>
-                </View>
-                <View style={styles.portionerBadge}>
-                  <Text style={styles.portionerTekst}>💰 {safeMaltid.pris_pr_portion} kr / portion</Text>
                 </View>
               </View>
             )}
@@ -148,15 +137,8 @@ export default function OpskriftModal({ maltid, maltidType, dagNavn, ugeNr, onCl
                     </View>
                     <View style={styles.ingHøjre}>
                       {ing.butik && <ButiksPill name={ing.butik} />}
-                      {!ing.estimeret && (
-                        <View style={{ alignItems: 'flex-end' }}>
-                          {ing.paa_tilbud && ing.normalpris && ing.normalpris > ing.pakkepris && (
-                            <Text style={styles.normalpris}>{ing.normalpris},-</Text>
-                          )}
-                          <Text style={[styles.ingPris, ing.paa_tilbud && styles.ingPrisTilbud]}>
-                            {ing.pakkepris},-
-                          </Text>
-                        </View>
+                      {ing.paa_tilbud && !ing.estimeret && (
+                        <Text style={styles.ingPrisTilbud}>{ing.pakkepris},-</Text>
                       )}
                     </View>
                   </View>
@@ -235,7 +217,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 5, marginBottom: 10,
   },
   resterTekst: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.green },
-  pris: { fontSize: 20, fontFamily: 'BricolageGrotesque_800ExtraBold', color: Colors.green, letterSpacing: -0.4 },
   sektion: { marginBottom: 28 },
   sektionTitel: {
     fontSize: 16, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.ink,
@@ -250,9 +231,7 @@ const styles = StyleSheet.create({
   ingNavn: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.ink },
   ingMaengde: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, marginTop: 2 },
   ingHøjre: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  normalpris: { fontSize: 11, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, textDecorationLine: 'line-through' },
-  ingPris: { fontSize: 15, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.ink },
-  ingPrisTilbud: { color: Colors.red },
+  ingPrisTilbud: { fontSize: 15, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.red },
   trinRække: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14 },
   trinNr: {
     width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.green,
