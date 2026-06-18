@@ -1,95 +1,88 @@
 # Mæt 🍽️
 
-AI-drevet madplanlægger til studerende i Danmark. Appen genererer en ugentlig madplan (3 måltider × 7 dage) baseret på **aktuelle tilbud fra danske supermarkeder**, brugerens budget, valgte butikker og kødpræferencer — og laver en indkøbsliste grupperet pr. butik.
+Madplanlægger til **danske familier (30+) der gemmer opskrifter** og vil spare på
+aftensmaden med ugens supermarkeds-tilbud. Saml dine favoritopskrifter ét sted,
+byg ugens madplan på få tryk, og få en indkøbsliste med ugens tilbud regnet ind —
+i den billigste butik.
 
-> **Dette README er skrevet så en anden Claude-instans (eller udvikler) kan fortsætte arbejdet uden tidligere kontekst.**
+> Niche-skifte (juni 2026): fra studie-budget-app → familie-/opskrifts-app.
+> Budget- og kostpræferencer er udfaset; værdien er **din samling + tilbud**.
+> Levende plan: se `ROADMAP.md`; backlog: `OPTIMERING.md`. Dybere arkitektur for
+> AI-instanser: `CLAUDE.md`.
 
 ---
 
 ## Tech stack
-
 | Lag | Teknologi |
 |---|---|
-| App | React Native + Expo SDK 54 (testes via Expo Go på iOS), TypeScript strict |
+| App | React Native + Expo SDK 54 (Expo Go), TypeScript strict |
 | Navigation | React Navigation (native-stack + bottom-tabs) |
-| Backend | Supabase: Auth, PostgreSQL (RLS), Storage, Edge Functions (Deno) |
-| AI | OpenAI GPT-4o via edge function `dynamic-action` |
-| Fonte | BricolageGrotesque (700/800) til overskrifter, Inter (400/600/700) til brødtekst |
+| Backend | Supabase: Auth, Postgres (RLS), Storage, Edge Functions (Deno) |
+| AI | OpenAI gpt-4o-mini (kun i edge-funktioner — nævnes ALDRIG i UI'et) |
+| Fonte | Bricolage Grotesque (overskrifter), Inter (brødtekst) |
 
-`npx tsc --noEmit` skal altid være ren.
+**Verifikations-gate:** `npx tsc --noEmit` skal altid være ren. Plus en hurtig
+regressions-test: `node scripts/test-matchning.mjs`.
 
 ## Kom i gang
-
 ```bash
 npm install
-# Opret .env med:
-# EXPO_PUBLIC_SUPABASE_URL=...
-# EXPO_PUBLIC_SUPABASE_ANON_KEY=...
-npx expo start
+npx expo start          # --clear efter dependency-ændringer
 ```
+Supabase-URL + publishable key ligger i `lib/supabase.ts`. OpenAI-nøglen er en
+secret i Supabase (ikke i appen). Projekt-ref: `oqolcifpmdybimspnadc`.
 
-OpenAI-nøglen ligger som secret i Supabase (ikke i appen). Edge function deployes med Supabase CLI:
+## Skærme (bund-tabs)
+**Hjem** · **Uge plan** · stor central **+** (tilføj opskrift) · **Indkøb** · **Profil**
 
-```bash
-supabase functions deploy dynamic-action
-```
+- **Hjem:** "I aften"-forslag, **❤️ Dine favoritter** (vandret stribe — tryk → læg på madplan / tilføj til indkøbsliste), **Tilbud til dig** (se nedenfor), **Ugens aviser** (forsider af butikkernes tilbudsaviser, åbnes in-app).
+- **Uge plan:** byg ugen dag for dag; vælg én eller flere retter til samme dag; byt/slet pr. ret.
+- **Indkøb:** kategoriseret liste, kryds-af, blå **+** (tilføj tilbudsvare).
+- **+ (central):** halvskærms-ark → foto / screenshot / link / skriv selv.
 
-(På udviklingsmaskinen ligger CLI'en under `%LOCALAPPDATA%\npm-cache\_npx\...\supabase.exe`.)
+## Pris-motoren (kernen, 3 lag)
+1. `constants/basispriser.ts` — basispriser for et fast søgeords-vokabular. **Ændres aldrig.**
+2. `constants/tilbud/*.ts` — ugens tilbud pr. butik (netto, rema1000, superbrugsen, bilka, fotex), hver med et `uge`-nr.
+3. **Live-overlay:** `lib/tilbudSync.ts` henter Supabase-tabellen `tilbud` og **fletter** den oven på filerne pr. butik for indeværende uge (tom tabel → filerne bruges).
 
-## Arkitektur og dataflow
+`constants/tilbudspriser.ts` merger i hukommelsen: effektiv pris = basis, erstattet
+af et tilbud kun når det er billigere. Priser er **hel-pakke**. `matcherSoegeord`
+matcher korte generiske ord (≤3 tegn) som HELE ord (så `mel`≠`melon`), længere ord
+som ord-start. Pr-enhed-tilbud ("pr. 100g/stk") udelukkes fra prissætning (`erPrEnhed`).
 
-1. **Bruger** vælger i ProfilScreen: butikker (fx Netto, Rema 1000), ugebudget, antal personer og kødpræference (`Alt` / `Kylling` / `Oksekød` / `Svinekød`).
-2. **HomeScreen** kalder edge functionen `dynamic-action` med disse præferencer.
-3. **Edge functionen** (`supabase/functions/dynamic-action/index.ts`):
-   - Indeholder `TEST_TILBUD` — en indbygget tekstkonstant med **rigtige tilbudsdata fra Rema 1000 og Netto**, manuelt indtastet og organiseret i kategorier (kød, mejeri, grønt …). Dette er en bevidst test-løsning, fordi AI'en ikke pålideligt kunne læse tilbudsavis-billeder.
-   - `filtrerTilbudTilButikker()` fjerner sektioner for butikker brugeren IKKE har valgt, før teksten sendes til AI'en.
-   - Sender systemprompt + opskriftsbog + filtrerede tilbud til GPT-4o (`max_tokens: 16000`, `temperature: 0.2`).
-   - **Genberegner deterministisk** `butik.subtotal` og `indkoebspris` ud fra `varer[].pris`, så indkøbsliste og forside altid stemmer (AI'ens egne totaler er upålidelige).
-   - Gemmer planen i tabellen `madplaner` (kolonner: `uge_nr`, `plan` som JSONB).
-4. **Appen** viser planen i PlanerScreen, indkøbslisten i IndkøbScreen og opskrifter i OpskriftModal.
+### "Tilbud til dig" (personligt)
+`tilbudTilDig` viser tilbud relevante for brugeren frem for blot størst kr-besparelse:
+- **⭐ Mine varer** (watchlist gemt i `profiles.watch_items`, vælges i `MineVarerModal`)
+- **❤️ Favoritter + madplan** (ingrediens-søgeord fra favoritopskrifter/ugens plan)
+- Rangordnes efter **vigtighed** (`constants/vigtighed.ts` = kurateret stapel-vægt + opskrifts-frekvens), så hverdagsvarer slår billige nichevarer, og **billigste butik** vinder på tværs af butikker.
 
-## Opskriftsbog-tilgangen (vigtigste designvalg)
+## Opskrifter (statiske + brugerens)
+- Statiske: `supabase/functions/dynamic-action/opskrifter.ts` (re-eksporteret via `constants/opskrifter.ts`). Kategorier: aftensmad/suppe/salat/broed/**dessert**.
+- Brugerens: `bruger_opskrifter`-tabellen (`importeret: true`). Tilføjes via link, foto/screenshot eller skrives/redigeres manuelt.
+- **Samlet accessor:** `lib/brugerOpskrifter.ts` (`alleOpskrifter()`/`findOpskrift()`) bruges overalt, så importerede får priser, badges, billeder og kan planlægges.
+- Favoritter: `lib/favoritter.ts` + `favoritter`-tabel.
 
-AI'en opfinder IKKE retter. Den **matcher faste opskrifter** fra `supabase/functions/dynamic-action/opskrifter.ts` mod de aktuelle tilbud og vælger de billigste pr. portion. Hver opskrift har:
+## Tilbudsaviser (automatisering)
+- **Hosting:** komprimerede PDF'er + side-1-cover i Supabase Storage-bucket `tilbudsaviser` (offentlig). Forsidens "Ugens aviser" viser coverne og åbner avisen in-app (`expo-web-browser`).
+- **Data:** edge-funktionen `importer-tilbud` (GPT-vision) udtrækker `{navn, pris, soeg}` fra én avis-side. Det lokale script **`scripts/opdater-tilbud.ps1`** gør det hele på én gang: upload PDF+cover + render hver side → `importer-tilbud` → skriv til `tilbud`-tabellen for ugen. (Fuld kørsel ~10-15 min/uge; se `OPTIMERING.md`.)
 
-- `koed`: kategori (`Oksekød` / `Kylling` / `Svinekød` / `Alt`) — filtreres mod brugerens kødvalg
-- `portioner`: antal portioner opskriften giver
-- Ingredienser med `soeg`-nøgleord (til at matche tilbudslinjer) og `vaelgBilligstPerKg`-flag
+## Notifikationer (overvåg en vare → push på tilbud)
+Brugeren kan overvåge **specifikke varer** (🔔 på tilbud/indkøbsvarer/ingredienser, eller et
+fritekst-felt i Profil) og få **push når varen er på tilbud** — også når appen er lukket.
+- **Backend (bygget):** tabeller `watchlist`/`push_tokens`/`notifikationer_sendt`; `pg_cron`
+  kalder dagligt den idempotente edge-funktion `send-tilbud-notifikationer`, der matcher mod
+  ugens `tilbud` i brugerens butikker og sender via Expo Push API (én push pr. vare pr. uge).
+- **Forudsætning:** ægte push kræver et **EAS development build** (ikke Expo Go). Se
+  `docs/superpowers/plans/2026-06-18-tilbuds-notifikationer.md` (Fase C) + spec'en i `specs/`.
 
-Der er pt. 10 opskrifter. **Brugeren vil tilføje flere** — de skrives ud fra hvad der typisk er på tilbud.
+## Edge-funktioner (Deno, `supabase/functions/`)
+- `importer-opskrift` — opskrift fra `{url}` eller `{billede}` → appens skema med `soeg`-ord.
+- `importer-tilbud` — én avis-side (billede) → `{varer:[{navn,pris,soeg}]}`.
+- `send-tilbud-notifikationer` — match watchlist mod ugens tilbud → Expo Push (kaldes af `pg_cron`).
+- `dynamic-action` — legacy plan-generator; ikke længere i brug (plan bygges klient-side).
 
-## Pris-regler (hårdt lært)
-
-- **Altid hel-pakke-priser, aldrig gram-priser.** Hvis en ret bruger 150 g kylling af en 900 g-pakke til 39 kr, koster ingrediensen 39 kr — resten ryger i restlager.
-- `pris_pr_portion` = samlet ingredienspris / portioner.
-- Restlager (`restlager[]`) markerer overskydende varer som `gemt_til_naeste_gang` eller `spild`.
-- **"Sparet"-beløbet på forsiden = budget − indkoebspris** (ikke tilbudsrabat). `Math.max(0, budget - indkoebspris)`.
-
-## Filoversigt
-
-| Fil | Indhold |
-|---|---|
-| `types/madplan.ts` | Alle delte typer: `Madplan`, `Dag`, `Maltid`, `Ingrediens`, `IndkoebsButik`, `RestlagerVare` |
-| `supabase/functions/dynamic-action/index.ts` | Edge function: prompt, TEST_TILBUD, butiksfiltrering, subtotal-genberegning |
-| `supabase/functions/dynamic-action/opskrifter.ts` | Opskriftsbogen (10 opskrifter pr. kødkategori) |
-| `screens/HomeScreen.tsx` | Forside: budget, sparet-kort, "Generer madplan"-knap |
-| `screens/PlanerScreen.tsx` | Ugeplan med 3 måltider/dag, protein-ankre, restlager-række |
-| `screens/IndkøbScreen.tsx` | Indkøbsliste grupperet pr. butik, viser `antal_pakker × pakkestoerrelse`, checkboxes |
-| `screens/ProfilScreen.tsx` | Butikker, budget, antal personer, kødvalg (`KOED_VALG`) |
-| `components/OpskriftModal.tsx` | Opskriftsdetalje: ingredienser m. pakkepris, fremgangsmåde, portioner-badges ("X portioner · Y kr / portion") |
-| `components/ButiksPill.tsx` | Lille butiks-badge |
-| `constants/theme.ts` | `Colors`, `Radii` — brug altid disse, aldrig hardcodede farver |
-
-## Løste problemer (gentag ikke fejlene)
-
-1. **Kun 2 dage genereret** → `max_tokens` var for lav (6000); nu 16000 + eksplicit "Du SKAL generere alle 7 dage"-regel i prompten.
-2. **Forkerte priser** (150 g kylling = 6,5 kr) → AI regnede gram-pris; prompten kræver nu pakkepris.
-3. **Indkøbsliste ≠ forside-total** → subtotaler genberegnes deterministisk i edge functionen, stol aldrig på AI'ens tal.
-4. **AI valgte ikke-valgte butikker** → to lag: tekstfiltrering før prompt + "BUTIKKER — ABSOLUT REGEL" i prompten.
-
-## Status / næste skridt
-
-- ✅ Login, onboarding, madplan, indkøbsliste, opskriftsmodal, profil — alt virker
-- 🔜 Flere opskrifter i `opskrifter.ts` (brugeren laver dem ud fra tilbudsaviserne)
-- 🔜 Erstatte `TEST_TILBUD` med rigtig tilbudsdata-pipeline (scraping/API) på sigt
-- Alt UI-tekst er på **dansk** — fortsæt med det
+## Konventioner
+- Al UI-tekst er **dansk**; mange filnavne bruger `æøå`.
+- Brug altid `Colors`/`Radii` fra `constants/theme.ts` (grøn brand; blå = sekundær handling).
+- AI nævnes aldrig i brugertekster.
+- Deploy edge-funktion: `npx supabase functions deploy <navn> --project-ref oqolcifpmdybimspnadc`.
