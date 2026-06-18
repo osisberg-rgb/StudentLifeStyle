@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView,
-  Alert, Modal,
+  Alert, Modal, TextInput, Switch,
 } from 'react-native';
-import Slider from '@react-native-community/slider';
 import { Colors, Radii } from '../constants/theme';
 import ButiksPill from '../components/ButiksPill';
 import Chip from '../components/Chip';
@@ -11,64 +10,70 @@ import BesparelsesHistorikModal from '../components/BesparelsesHistorikModal';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useSamletBesparelse, formatKr } from '../hooks/useSamletBesparelse';
+import { alleOpskrifter } from '../lib/brugerOpskrifter';
+import {
+  hentWatchlist, alleWatch, tilføjWatch, fjernWatch, termFraFritekst, type WatchRække,
+} from '../lib/watchlist';
+import { harTilladelse, registrérForPush, afmeldPush } from '../lib/notifikationer';
 
-const ALLE_BUTIKKER = ['Netto', 'Rema 1000', 'Lidl', '365discount', 'Føtex', 'SuperBrugsen', 'Kvikly', 'Bilka'];
-
-const KOED_VALG: { label: string; ikon: string }[] = [
-  { label: 'Alt',      ikon: '🍽️' },
-  { label: 'Kylling',  ikon: '🍗' },
-  { label: 'Oksekød',  ikon: '🥩' },
-  { label: 'Svinekød', ikon: '🐷' },
-];
+const ALLE_BUTIKKER = ['Netto', 'Rema 1000', 'Føtex', 'SuperBrugsen', 'Bilka'];
 
 export default function ProfilScreen() {
   const { user, signOut } = useAuth();
-  const [valgteButikker, setValgteButikker] = useState(['Netto', 'Rema 1000', 'Lidl']);
+  const [valgteButikker, setValgteButikker] = useState(['Netto', 'Rema 1000']);
   const [butikModalVisible, setButikModalVisible] = useState(false);
-  const [budget, setBudget] = useState(350);
-  const [budgetDraft, setBudgetDraft] = useState(350);
-  const [budgetModalVisible, setBudgetModalVisible] = useState(false);
-  const [koed, setKoed] = useState<string[]>(['Alt']);
-  const [kostModalVisible, setKostModalVisible] = useState(false);
   const [personer, setPersoner] = useState(4);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [historikÅben, setHistorikÅben] = useState(false);
+  const [watch, setWatch] = useState<WatchRække[]>([]);
+  const [nyVare, setNyVare] = useState('');
+  const [notiTil, setNotiTil] = useState(false);
   const { samletTilbud, antalPlaner, uger, klar: besparelseKlar } = useSamletBesparelse();
   const harPlaner = antalPlaner > 0;
 
   const navn = displayName ?? user?.email?.split('@')[0] ?? 'Profil';
   const initial = navn[0]?.toUpperCase();
+  // Antal opskrifter i appen (statiske + brugerens egne importerede)
+  const antalOpskrifter = alleOpskrifter().length;
 
   // Hent profil fra DB ved opstart
   useEffect(() => {
-    supabase.from('profiles').select('stores, budget_per_week, diet, household_size').maybeSingle().then(({ data }) => {
+    supabase.from('profiles').select('stores, household_size').maybeSingle().then(({ data }) => {
       if (data) {
         if (data.stores?.length) setValgteButikker(data.stores);
-        if (data.budget_per_week) { setBudget(data.budget_per_week); setBudgetDraft(data.budget_per_week); }
         if (data.household_size) setPersoner(data.household_size);
-        if (data.diet?.length) {
-          const d = data.diet as string[];
-          const koedFundet = d.filter(x => KOED_VALG.some(k => k.label === x));
-          setKoed(koedFundet.length > 0 ? koedFundet : ['Alt']);
-        }
       }
     });
     // Separat kald — display_name-kolonnen må ikke vælte resten af profilen
     supabase.from('profiles').select('display_name').maybeSingle().then(({ data, error }) => {
       if (!error && data?.display_name) setDisplayName(data.display_name);
     });
+    hentWatchlist().then(setWatch);
+    harTilladelse().then(setNotiTil);
   }, []);
+
+  // Overvåg en ny vare (fritekst) — beder også om tilladelse hvis ikke givet
+  async function tilføjOvervågning() {
+    const label = nyVare.trim();
+    const term = termFraFritekst(label);
+    if (!term) return;
+    const ok = await tilføjWatch(label, term, 'fritekst');
+    if (!ok) { Alert.alert('Hov', 'Kunne ikke gemme. Er du logget ind?'); return; }
+    setWatch(alleWatch());
+    setNyVare('');
+    if (!notiTil) setNotiTil(await registrérForPush());
+  }
+  async function fjernOvervågning(term: string) {
+    await fjernWatch(term);
+    setWatch(alleWatch());
+  }
+  async function vekslNotifikationer(v: boolean) {
+    if (v) setNotiTil(await registrérForPush());
+    else { await afmeldPush(); setNotiTil(false); }
+  }
 
   async function gemButikker(butikker: string[]) {
     await supabase.from('profiles').update({ stores: butikker }).eq('id', user!.id);
-  }
-
-  async function gemBudget(b: number) {
-    await supabase.from('profiles').update({ budget_per_week: b }).eq('id', user!.id);
-  }
-
-  async function gemKost() {
-    await supabase.from('profiles').update({ diet: koed }).eq('id', user!.id);
   }
 
   // Gemmes med det samme ved tryk — bruges automatisk som standard i Ny plan
@@ -104,7 +109,7 @@ export default function ProfilScreen() {
           </View>
           <Text style={styles.navn}>{navn}</Text>
           <Text style={styles.rolle}>
-            {personer} {personer === 1 ? 'person' : 'personer'} i husstanden · {budget} kr/uge
+            {personer} {personer === 1 ? 'person' : 'personer'} i husstanden
           </Text>
         </View>
 
@@ -128,8 +133,8 @@ export default function ProfilScreen() {
             )}
           </TouchableOpacity>
           <View style={[styles.statKort, { flex: 1 }]}>
-            <Text style={styles.statLabel}>Madplaner</Text>
-            <Text style={[styles.statVal, { color: Colors.ink }]}>{antalPlaner}</Text>
+            <Text style={styles.statLabel}>Opskrifter</Text>
+            <Text style={[styles.statVal, { color: Colors.ink }]}>{antalOpskrifter}</Text>
           </View>
         </View>
 
@@ -140,18 +145,6 @@ export default function ProfilScreen() {
             <Text style={styles.rækkIkon}>🛒</Text>
             <Text style={styles.rækkeLabel}>Mine butikker</Text>
             <Text style={styles.værditekst}>{butikSummary} ›</Text>
-          </TouchableOpacity>
-          <Separator />
-          <TouchableOpacity style={styles.række} onPress={() => { setBudgetDraft(budget); setBudgetModalVisible(true); }}>
-            <Text style={styles.rækkIkon}>💰</Text>
-            <Text style={styles.rækkeLabel}>Budget pr. uge</Text>
-            <Text style={styles.værditekst}>{budget} kr ›</Text>
-          </TouchableOpacity>
-          <Separator />
-          <TouchableOpacity style={styles.række} onPress={() => setKostModalVisible(true)}>
-            <Text style={styles.rækkIkon}>🥗</Text>
-            <Text style={styles.rækkeLabel}>Kostpræferencer</Text>
-            <Text style={styles.værditekst}>{koed.includes('Alt') ? 'Alt kød' : koed.join(', ')} ›</Text>
           </TouchableOpacity>
           <Separator />
           <Række ikon="👥" label="Antal personer">
@@ -175,6 +168,53 @@ export default function ProfilScreen() {
               </TouchableOpacity>
             </View>
           </Række>
+        </View>
+
+        {/* Notifikationer — overvåg specifikke varer og få push når de er på tilbud */}
+        <Text style={styles.sektionLabel}>NOTIFIKATIONER</Text>
+        <View style={styles.kort}>
+          <View style={styles.række}>
+            <Text style={styles.rækkIkon}>🔔</Text>
+            <Text style={styles.rækkeLabel}>Få besked om tilbud</Text>
+            <Switch
+              value={notiTil}
+              onValueChange={vekslNotifikationer}
+              trackColor={{ true: Colors.green, false: Colors.line }}
+            />
+          </View>
+          <Separator />
+          <View style={styles.watchInputRække}>
+            <TextInput
+              style={styles.watchInput}
+              value={nyVare}
+              onChangeText={setNyVare}
+              placeholder="Overvåg en vare, fx Faxe Kondi"
+              placeholderTextColor={Colors.inkSoft}
+              onSubmitEditing={tilføjOvervågning}
+              returnKeyType="done"
+              autoCapitalize="none"
+            />
+            <TouchableOpacity
+              style={[styles.watchTilføj, !nyVare.trim() && { opacity: 0.4 }]}
+              onPress={tilføjOvervågning}
+              disabled={!nyVare.trim()}
+            >
+              <Text style={styles.watchTilføjTekst}>Tilføj</Text>
+            </TouchableOpacity>
+          </View>
+          {watch.length > 0 && <Separator />}
+          {watch.map((w, i) => (
+            <View key={w.id}>
+              {i > 0 && <Separator />}
+              <View style={styles.række}>
+                <Text style={styles.rækkIkon}>🔔</Text>
+                <Text style={styles.rækkeLabel} numberOfLines={1}>{w.label}</Text>
+                <TouchableOpacity onPress={() => fjernOvervågning(w.term)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={styles.watchFjern}>Fjern</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
         </View>
 
         {/* Andet */}
@@ -235,108 +275,6 @@ export default function ProfilScreen() {
           </View>
         </SafeAreaView>
       </Modal>
-      {/* Kost-modal */}
-      <Modal
-        visible={kostModalVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setKostModalVisible(false)}
-      >
-        <SafeAreaView style={styles.modalRoot}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitel}>Kostpræferencer</Text>
-            <TouchableOpacity onPress={() => { gemKost(); setKostModalVisible(false); }}>
-              <Text style={styles.modalLuk}>Færdig</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.modalSub}>Vælg de kødtyper I spiser derhjemme. Madplanen holder sig til dem.</Text>
-          <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
-            {KOED_VALG.map(k => {
-              const aktiv = koed.includes(k.label);
-              return (
-                <TouchableOpacity
-                  key={k.label}
-                  style={[styles.kostRække, aktiv && styles.kostRækkeAktiv]}
-                  onPress={() => {
-                    if (k.label === 'Alt') {
-                      setKoed(['Alt']);
-                    } else {
-                      setKoed(prev => {
-                        const uden = prev.filter(x => x !== 'Alt');
-                        return uden.includes(k.label)
-                          ? uden.filter(x => x !== k.label).length === 0 ? ['Alt'] : uden.filter(x => x !== k.label)
-                          : [...uden, k.label];
-                      });
-                    }
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.kostIkon}>{k.ikon}</Text>
-                  <Text style={[styles.kostLabel, aktiv && { color: Colors.green }]}>{k.label}</Text>
-                  <View style={[styles.kostCheck, aktiv && styles.kostCheckAktiv]}>
-                    {aktiv && <Text style={styles.kostCheckmark}>✓</Text>}
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </SafeAreaView>
-      </Modal>
-
-      {/* Budget-modal */}
-      <Modal
-        visible={budgetModalVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setBudgetModalVisible(false)}
-      >
-        <SafeAreaView style={styles.modalRoot}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitel}>Budget pr. uge</Text>
-            <TouchableOpacity onPress={() => setBudgetModalVisible(false)}>
-              <Text style={styles.modalLuk}>Annuller</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.modalSub}>
-            Sæt dit ugentlige madbudget. Vi holder madplanen inden for dette beløb.
-          </Text>
-
-          <View style={styles.budgetVisning}>
-            <Text style={styles.budgetBeløb}>{budgetDraft} kr</Text>
-            <Text style={styles.budgetLabel}>pr. uge</Text>
-          </View>
-
-          <View style={styles.sliderWrap}>
-            <Slider
-              style={{ width: '100%', height: 40 }}
-              minimumValue={200}
-              maximumValue={800}
-              step={10}
-              value={budgetDraft}
-              onValueChange={v => setBudgetDraft(Math.round(v))}
-              minimumTrackTintColor={Colors.green}
-              maximumTrackTintColor={Colors.line}
-              thumbTintColor={Colors.green}
-            />
-            <View style={styles.sliderLabels}>
-              <Text style={styles.sliderLabel}>200 kr</Text>
-              <Text style={styles.sliderLabel}>800 kr</Text>
-            </View>
-          </View>
-
-          <View style={styles.modalFooter}>
-            <TouchableOpacity
-              style={styles.btnPrimary}
-              onPress={() => { setBudget(budgetDraft); gemBudget(budgetDraft); setBudgetModalVisible(false); }}
-            >
-              <Text style={styles.btnText}>Gem ændringer</Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </Modal>
-
       <BesparelsesHistorikModal
         synlig={historikÅben}
         samletTilbud={samletTilbud}
@@ -407,6 +345,15 @@ const styles = StyleSheet.create({
     fontSize: 15, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.ink,
     minWidth: 20, textAlign: 'center',
   },
+  watchInputRække: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+  watchInput: {
+    flex: 1, backgroundColor: Colors.canvas, borderRadius: Radii.btn,
+    borderWidth: 1, borderColor: Colors.line, paddingHorizontal: 12, paddingVertical: 9,
+    fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.ink,
+  },
+  watchTilføj: { backgroundColor: Colors.green, borderRadius: Radii.btn, paddingHorizontal: 14, paddingVertical: 10 },
+  watchTilføjTekst: { color: '#fff', fontSize: 14, fontFamily: 'Inter_700Bold' },
+  watchFjern: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.red },
   logUdRække: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },
   logUdIcon: { fontSize: 18, marginRight: 14, color: Colors.red },
   logUdTekst: { fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.red },
@@ -430,52 +377,4 @@ const styles = StyleSheet.create({
   modalFooter: { padding: 20, marginTop: 'auto' },
   btnPrimary: { backgroundColor: Colors.green, borderRadius: Radii.btn, padding: 15, alignItems: 'center' },
   btnText: { color: '#fff', fontSize: 15, fontFamily: 'Inter_700Bold' },
-  budgetVisning: { alignItems: 'center', marginTop: 32, marginBottom: 24 },
-  budgetBeløb: { fontSize: 52, fontFamily: 'BricolageGrotesque_800ExtraBold', color: Colors.green, letterSpacing: -1 },
-  budgetLabel: { fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, marginTop: 4 },
-  sliderWrap: { paddingHorizontal: 24 },
-  sliderLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  sliderLabel: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.inkSoft },
-  kostSektionLabel: {
-    fontSize: 11, fontFamily: 'Inter_700Bold', color: Colors.inkSoft,
-    letterSpacing: 1, textTransform: 'uppercase', marginTop: 20, marginBottom: 2,
-  },
-  kostSektionSub: {
-    fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, marginBottom: 12,
-  },
-  koedGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  koedChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: Colors.card, borderRadius: Radii.btn,
-    borderWidth: 1.5, borderColor: Colors.line,
-    paddingHorizontal: 14, paddingVertical: 10,
-  },
-  koedChipAktiv: { borderColor: Colors.green, backgroundColor: Colors.greenSoft },
-  koedIkon: { fontSize: 18 },
-  koedLabel: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.ink },
-  koedTjek: { fontSize: 12, color: Colors.green, fontFamily: 'Inter_700Bold' },
-  kostRadio: {
-    width: 22, height: 22, borderRadius: 11,
-    borderWidth: 2, borderColor: Colors.line,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  kostRadioAktiv: { borderColor: Colors.green },
-  kostRadioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.green },
-  kostRække: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: Colors.card, borderRadius: Radii.card,
-    borderWidth: 1.5, borderColor: Colors.line,
-    padding: 16, marginBottom: 10,
-  },
-  kostRækkeAktiv: { borderColor: Colors.green, backgroundColor: Colors.greenSoft },
-  kostIkon: { fontSize: 24, marginRight: 14 },
-  kostLabel: { fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.ink, marginBottom: 2 },
-  kostBeskrivelse: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.inkSoft },
-  kostCheck: {
-    width: 24, height: 24, borderRadius: 12,
-    borderWidth: 1.5, borderColor: Colors.line,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  kostCheckAktiv: { backgroundColor: Colors.greenBright, borderColor: Colors.greenBright },
-  kostCheckmark: { color: '#fff', fontSize: 13, fontFamily: 'Inter_700Bold' },
 });
