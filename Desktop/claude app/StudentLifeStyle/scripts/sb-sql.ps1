@@ -37,5 +37,8 @@ else            { throw "Angiv -File eller -Query" }
 Add-Type -AssemblyName System.Web.Extensions
 $ser = New-Object System.Web.Script.Serialization.JavaScriptSerializer
 $body = $ser.Serialize(@{ query = [string]$sql })
-$r = Invoke-RestMethod -Method Post -Uri "https://api.supabase.com/v1/projects/oqolcifpmdybimspnadc/database/query" -Headers @{ Authorization = "Bearer $token" } -ContentType "application/json" -Body $body
+# Send som UTF-8 bytes — ellers koder PS 5.1 body'en som Latin-1 og ødelægger
+# tegn uden for Latin-1 (fx em-dash —), så API'ets JSON-parser fejler.
+$bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
+$r = Invoke-RestMethod -Method Post -Uri "https://api.supabase.com/v1/projects/oqolcifpmdybimspnadc/database/query" -Headers @{ Authorization = "Bearer $token" } -ContentType "application/json; charset=utf-8" -Body $bytes
 $r | ConvertTo-Json -Depth 10
