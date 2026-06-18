@@ -29,9 +29,12 @@ export default function TilføjOpskriftSheet({ synlig, onVælg, onLuk }: Props) 
   useEffect(() => { if (synlig) translateY.setValue(0); }, [synlig, translateY]);
 
   const panResponder = PanResponder.create({
-    // Overtag kun ved en tydelig NEDADGÅENDE træk-bevægelse, så tryk på
-    // kortene stadig registreres som tryk
-    onMoveShouldSetPanResponder: (_, g) => g.dy > 6 && g.dy > Math.abs(g.dx),
+    // Brug CAPTURE-fasen: arket opfanger en tydelig NEDADGÅENDE træk-bevægelse
+    // FØR kortene — ellers holder kortets TouchableOpacity på touch'en når man
+    // begynder trækket oven på et kort. Et almindeligt tryk (uden bevægelse)
+    // når aldrig tærsklen, så kortene kan stadig trykkes.
+    onMoveShouldSetPanResponderCapture: (_, g) => g.dy > 6 && g.dy > Math.abs(g.dx),
+    onPanResponderTerminationRequest: () => false,
     onPanResponderMove: (_, g) => { if (g.dy > 0) translateY.setValue(g.dy); },
     onPanResponderRelease: (_, g) => {
       if (g.dy > 120 || g.vy > 0.6) {
