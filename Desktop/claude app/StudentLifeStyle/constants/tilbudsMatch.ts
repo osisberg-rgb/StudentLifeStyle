@@ -5,7 +5,7 @@
 // søg-match — sikrer at tallet kun tæller varer hvor tilbudsprisen faktisk
 // er lavere end normalprisen, så det matcher hvad indkøbslisten viser.
 import { slåEffektivPrisOp } from './tilbudspriser';
-import { OPSKRIFTER } from './opskrifter';
+import { findOpskrift } from '../lib/brugerOpskrifter';
 
 export type TilbudsMatch = {
   antal: number;       // unikke ingredienser på tilbud
@@ -13,7 +13,7 @@ export type TilbudsMatch = {
 };
 
 export function tælTilbudsMatch(opskriftId: string, butikker?: string[]): TilbudsMatch {
-  const opskrift = OPSKRIFTER.find(o => o.id === opskriftId);
+  const opskrift = findOpskrift(opskriftId);
   if (!opskrift) return { antal: 0, butikker: [] };
 
   const butikSet = new Set<string>();

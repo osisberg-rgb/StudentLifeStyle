@@ -3,13 +3,11 @@
 // kopi, så "reset" sker automatisk når ugen skifter eller tilbudsfilen
 // opdateres. Basispriser.ts er kilden og ændres aldrig.
 import { slagBasispris, slåPrisOp, matcherSoegeord } from './basispriser';
+import { vigtighed } from './vigtighed';
 import { REMA1000_TILBUD } from './tilbud/rema1000';
 import { NETTO_TILBUD } from './tilbud/netto';
-import { LIDL_TILBUD } from './tilbud/lidl';
-import { DISCOUNT365_TILBUD } from './tilbud/365discount';
 import { FOTEX_TILBUD } from './tilbud/fotex';
 import { SUPERBRUGSEN_TILBUD } from './tilbud/superbrugsen';
-import { KVIKLY_TILBUD } from './tilbud/kvikly';
 import { BILKA_TILBUD } from './tilbud/bilka';
 
 export type TilbudsKilde = {
@@ -26,11 +24,8 @@ export type TilbudsKilde = {
 const TILBUDSKILDER: TilbudsKilde[] = [
   REMA1000_TILBUD,
   NETTO_TILBUD,
-  LIDL_TILBUD,
-  DISCOUNT365_TILBUD,
   FOTEX_TILBUD,
   SUPERBRUGSEN_TILBUD,
-  KVIKLY_TILBUD,
   BILKA_TILBUD,
 ];
 
@@ -53,7 +48,15 @@ export function brugerLiveTilbud(): boolean {
 }
 
 function alleKilder(): TilbudsKilde[] {
-  return fjernKilder ?? TILBUDSKILDER;
+  if (!fjernKilder) return TILBUDSKILDER;
+  // FLET frem for at erstatte: brug DB-tilbud for de butikker der har data for
+  // indeværende uge, og de hardkodede filer for resten — så tabellen kan fyldes
+  // butik for butik uden at de andre butikkers tilbud forsvinder.
+  const uge = aktuelUge();
+  const dbButikker = new Set(
+    fjernKilder.filter(k => matcherUge(k, uge)).map(k => k.butik),
+  );
+  return [...fjernKilder, ...TILBUDSKILDER.filter(k => !dbButikker.has(k.butik))];
 }
 
 export type EffektivPris = {
@@ -87,10 +90,22 @@ export function aktiveTilbud(butikker?: string[]): TilbudsKilde[] {
   return tilbudCache.kilder.filter(k => butikker.includes(k.butik));
 }
 
+// Tilbud prissat PR. ENHED (fx "Laksefilet pr. 100g", "Okseculotte pr. 1/2 kg",
+// "Sliders pr. stk.", "... pr. kuvert") er IKKE en pakkepris — `pris` gælder kun
+// 100g/500g/ét stk. Hvis motoren brugte dem som en hel pakke, ville en
+// recept-ingrediens blive vildt under-prissat (fx laks til 16,95 i stedet for
+// ~40). De udelukkes derfor fra pris-opslag og "bedste tilbud", men bliver
+// stadig i tilbuds-browseren, hvor navnet ærligt viser enheden.
+const PR_ENHED_RE = /\bpr\.\s*(\d|½|stk|kuvert|kg)/i;
+export function erPrEnhed(navn: string): boolean {
+  return PR_ENHED_RE.test(navn ?? '');
+}
+
 function slåTilbudOp(tekster: string[], butikker?: string[]): { pris: number; butik: string } | null {
   let bedste: { pris: number; butik: string } | null = null;
   for (const kilde of aktiveTilbud(butikker)) {
     for (const vare of kilde.varer) {
+      if (erPrEnhed(vare.navn)) continue;   // pr-enhed-pris er ikke en pakkepris
       const matcher = vare.soeg.some(s => tekster.some(t => matcherSoegeord(t, s)));
       if (matcher && (!bedste || vare.pris < bedste.pris)) {
         bedste = { pris: vare.pris, butik: kilde.butik };
@@ -145,6 +160,7 @@ export type TilbudsVisning = {
   normalpris: number;
   tilbudspris: number;
   besparelse: number;
+  kilde?: 'watch' | 'favorit' | 'generelt';   // hvorfor vist (til badge)
 };
 
 // Til "Bedste tilbud lige nu" på forsiden — størst besparelse først
@@ -152,6 +168,7 @@ export function bedsteTilbud(maks = 3, butikker?: string[]): TilbudsVisning[] {
   const ud: TilbudsVisning[] = [];
   for (const kilde of aktiveTilbud(butikker)) {
     for (const vare of kilde.varer) {
+      if (erPrEnhed(vare.navn)) continue;   // pr-enhed-pris kan ikke sammenlignes med basis
       const basis = slagBasispris(vare.soeg[0] ?? '') ?? slagBasispris(vare.navn);
       if (basis == null || vare.pris >= basis) continue;
       ud.push({
@@ -165,4 +182,67 @@ export function bedsteTilbud(maks = 3, butikker?: string[]): TilbudsVisning[] {
     }
   }
   return ud.sort((a, b) => b.besparelse - a.besparelse).slice(0, maks);
+}
+
+// "Tilbud til dig" — personligt udvalg frem for blot størst kr-besparelse.
+//  - watchTermer:   søgeord fra brugerens "Mine varer" (Pepsi, oksekød …) →
+//                   vises hvis varen er på tilbud i denne uge (uanset basis).
+//  - relevanteOrd:  ingrediens-søgeord fra favoritter/madplan → vises når de er
+//                   BILLIGERE end basis (en reel besparelse på noget du laver).
+//  Rangordning: watch-varer først, derefter favorit-varer (begge billigst/størst
+//  besparelse først). Tomt resultat → fallback til generelle bedste tilbud.
+export function tilbudTilDig(
+  watchTermer: string[],
+  relevanteOrd: string[],
+  maks = 4,
+  butikker?: string[],
+): TilbudsVisning[] {
+  const watch = watchTermer.map(t => t.toLowerCase().trim()).filter(t => t.length >= 2);
+  const rel = relevanteOrd.map(t => t.toLowerCase().trim()).filter(t => t.length >= 2);
+
+  const valgt = new Map<string, TilbudsVisning>();
+  for (const kilde of aktiveTilbud(butikker)) {
+    for (const vare of kilde.varer) {
+      if (erPrEnhed(vare.navn)) continue;
+      const tekst = (vare.navn + ' ' + vare.soeg.join(' ')).toLowerCase();
+      const watchTerm = watch.find(t => tekst.includes(t));
+      const basis = slagBasispris(vare.soeg[0] ?? '') ?? slagBasispris(vare.navn);
+      const ingTekster = [vare.navn.toLowerCase(), ...vare.soeg.map(s => s.toLowerCase())];
+      const erFavorit = !watchTerm && basis != null && vare.pris < basis
+        && rel.some(o => ingTekster.some(t => matcherSoegeord(t, o)));
+      if (!watchTerm && !erFavorit) continue;
+
+      // Logisk nøgle PÅ TVÆRS AF BUTIKKER: watch-varer grupperes på det matchede
+      // søgeord (fx 'smør'), favorit-varer på deres primære soeg-ord — så samme
+      // slags vare i flere butikker samles, og vi beholder den BILLIGSTE.
+      const nøgle = (watchTerm ?? vare.soeg[0] ?? vare.navn).toLowerCase();
+      const ny: TilbudsVisning = {
+        navn: vare.navn, soeg: vare.soeg, butik: kilde.butik,
+        normalpris: basis ?? vare.pris, tilbudspris: vare.pris,
+        besparelse: basis != null ? Math.max(0, basis - vare.pris) : 0,
+        kilde: watchTerm ? 'watch' : 'favorit',
+      };
+      const eks = valgt.get(nøgle);
+      if (!eks) {
+        valgt.set(nøgle, ny);
+      } else {
+        const billigst = ny.tilbudspris <= eks.tilbudspris ? ny : eks;
+        if (ny.kilde === 'watch' || eks.kilde === 'watch') billigst.kilde = 'watch';
+        valgt.set(nøgle, billigst);
+      }
+    }
+  }
+
+  const liste = [...valgt.values()].sort((a, b) => {
+    if (a.kilde !== b.kilde) return a.kilde === 'watch' ? -1 : 1;
+    // Vigtighed (mest brugt) først for BEGGE kilder.
+    const va = vigtighed(a.soeg), vb = vigtighed(b.soeg);
+    if (va !== vb) return vb - va;
+    // Tiebreaker: watch → billigste pris; favorit → størst besparelse.
+    return a.kilde === 'watch' ? a.tilbudspris - b.tilbudspris : b.besparelse - a.besparelse;
+  });
+  if (liste.length === 0) {
+    return bedsteTilbud(maks, butikker).map(t => ({ ...t, kilde: 'generelt' as const }));
+  }
+  return liste.slice(0, maks);
 }

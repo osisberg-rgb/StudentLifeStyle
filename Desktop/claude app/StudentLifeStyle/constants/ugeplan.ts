@@ -6,12 +6,12 @@
 // Erstatter det gamle GPT-4o-kald, der brugte 30-90 sek på at skrive en
 // kæmpe JSON, hvoraf næsten alt blev smidt væk. Nu: millisekunder, gratis,
 // offline. (ROADMAP: "lav uge-layoutet uden AI — øjeblikkeligt, gratis.")
-import { OPSKRIFTER } from './opskrifter';
 import { hentOpskriftPriser } from './opskriftPriser';
 import { måltiderPrRet } from './anbefaling';
 import { slåEffektivPrisOp } from './tilbudspriser';
-import { bygIndkøbsliste, beregnBesparelse } from './indkoeb';
+import { findOpskrift } from '../lib/brugerOpskrifter';
 import { Madplan, Dag, Maltid, Ingrediens } from '../types/madplan';
+import type { Opskrift } from '../types/opskrift';
 
 const UGEDAGE = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag', 'Søndag'];
 
@@ -24,7 +24,7 @@ function tomMaltid(personer: number): Maltid {
 // Aftensmad-måltid for en ret der laves (ikke rester) — samme felter og
 // priser som byt-en-ret producerer, så de to veje altid matcher.
 function kogtAftensmad(
-  opskrift: typeof OPSKRIFTER[0],
+  opskrift: Opskrift,
   butikker: string[] | undefined,
   portionerSkaleret: number,
   prisPrPortion: number,
@@ -52,7 +52,7 @@ function kogtAftensmad(
 
 // Rester-aften: refererer til rettens NAVN (ikke "Mandag aftensmad"), så
 // byt-en-ret kan finde og opdatere resterne, når selve retten byttes.
-function resterAftensmad(opskrift: typeof OPSKRIFTER[0], personer: number): Maltid {
+function resterAftensmad(opskrift: Opskrift, personer: number): Maltid {
   return {
     navn: `Rester: ${opskrift.navn}`,
     rester_fra: opskrift.navn,
@@ -74,8 +74,8 @@ export function byggUgeplan(
 
   // Bevar brugerens rækkefølge fra vælgeren
   const valgte = opskriftIds
-    .map(id => OPSKRIFTER.find(o => o.id === id))
-    .filter((o): o is typeof OPSKRIFTER[0] => !!o);
+    .map(id => findOpskrift(id))
+    .filter((o): o is Opskrift => !!o);
 
   // Byg aftens-slots: hver ret fylder måltiderPrRet aftener — første er
   // kogt, resten er rester. Slots placeres i rækkefølge over ugens dage.
@@ -100,11 +100,9 @@ export function byggUgeplan(
     aftensmad: aftenslots[i] ?? tomMaltid(personer),
   }));
 
-  // Indkøbsliste + pris + besparelse: samme deterministiske motor som overalt
-  const indkoebsliste = bygIndkøbsliste(opskriftIds, butikker, personer);
-  const indkoebspris = Math.round(indkoebsliste.reduce((s, b) => s + b.subtotal, 0));
-  const besparelse = beregnBesparelse(indkoebsliste);
-
+  // Indkøbslisten starter TOM. Varerne lægges først i listen, når brugeren
+  // åbner en opskrift og trykker "Tilføj til indkøbsliste" — så listen
+  // afspejler hvad familien rent faktisk vil købe, ikke hele planen automatisk.
   return {
     uge: ugeNr,
     antal_personer: personer,
@@ -114,10 +112,51 @@ export function byggUgeplan(
       navn: o.navn,
       portioner: priser.get(o.id)?.portioner ?? (o.portioner || 4),
     })),
-    indkoebsliste,
-    indkoebspris,
-    total: indkoebspris,
-    besparelse,
+    indkoebsliste: [],
+    indkoebspris: 0,
+    total: 0,
+    besparelse: 0,
     advarsler: [],
+  };
+}
+
+// En tom plan med ugens 7 dage og ingen retter — udgangspunktet, når
+// brugeren bygger ugen dag for dag (tryk på en dag → vælg én ret) i stedet
+// for at generere hele planen på én gang.
+export function tomUgeplan(personer: number, ugeNr: number): Madplan {
+  return {
+    uge: ugeNr,
+    antal_personer: personer,
+    dage: UGEDAGE.map(navn => ({
+      dag: navn,
+      morgenmad: tomMaltid(personer),
+      frokost: tomMaltid(personer),
+      aftensmad: tomMaltid(personer),
+    })),
+    valgte_opskrifter: [],
+    indkoebsliste: [],
+    indkoebspris: 0,
+    total: 0,
+    besparelse: 0,
+    advarsler: [],
+  };
+}
+
+// Byg aftensmad-måltidet for én ret — samme felter og priser som
+// byggUgeplan og byt-en-ret producerer, så alle veje matcher. Bruges når
+// brugeren vælger en ret til en enkelt dag.
+export function byggAftensmadForRet(
+  opskriftId: string,
+  butikker: string[] | undefined,
+  personer: number,
+): { maltid: Maltid; portioner: number } | null {
+  const opskrift = findOpskrift(opskriftId);
+  if (!opskrift) return null;
+  const info = hentOpskriftPriser(butikker, personer).get(opskriftId);
+  const portionerSkaleret = info?.portioner ?? (opskrift.portioner || 4);
+  const prisPrPortion = info && info.portioner > 0 ? Math.round(info.pris / info.portioner) : 0;
+  return {
+    maltid: kogtAftensmad(opskrift, butikker, portionerSkaleret, prisPrPortion, personer),
+    portioner: portionerSkaleret,
   };
 }

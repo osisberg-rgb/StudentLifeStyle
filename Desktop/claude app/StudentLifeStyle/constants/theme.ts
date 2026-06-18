@@ -10,6 +10,7 @@ export const Colors = {
   red: '#E23A2E',
   redSoft: '#FCE9E7',
   yellow: '#FFC93C',
+  blue: '#3478F6',
   card: '#FFFFFF',
 } as const;
 

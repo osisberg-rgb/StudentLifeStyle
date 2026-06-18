@@ -1,26 +1,29 @@
-// De 5 kategorier i "Vælg retter" — bruges som filter-chips.
+// Kategorierne i "Vælg retter" — bruges som filter-chips ved siden af
+// Alle / Favoritter / Dine opskrifter.
 //
-// SÅDAN TAGGER DU EN NY OPSKRIFT (i supabase/functions/dynamic-action/opskrifter.ts):
-//   Tilføj en kategorier-linje lige under id, fx:
-//     kategorier: ["billig-hurtig", "hverdag"],
-//   En ret må have 1-3 kategorier. Rettesnor:
-//   - billig:         KUN de billigste retter — ca. ≤13 kr/portion
-//   - fitness:        magert protein (kylling/okse/æg/fisk) + ris/kartofler/grønt
-//   - boernefavorit:  pasta, kødsovs, tortilla, pølser, panering, ost
-//   - hverdag:        nem OG hurtig — én gryde/pande, få trin, ingen finesser
-//   - storportion:    gryderetter og fade der mætter mange / giver rester
+// SÅDAN TAGGER DU EN OPSKRIFT (i supabase/functions/dynamic-action/opskrifter.ts):
+//   Tilføj/ret kategorier-linjen lige under id, fx:
+//     kategorier: ["suppe"],
+//     kategorier: ["salat"],
+//   Rettesnor:
+//   - suppe:    retter der spises som suppe
+//   - salat:    retter der spises som salat
+//   - broed:    brød, boller, focaccia, pølsehorn osv.
+//   - dessert:  desserter, kager, søde retter osv.
+//   Alt der IKKE er tagget suppe, salat, broed eller dessert vises automatisk
+//   under "Aftensmad". (En ret må gerne have flere tags.)
 
 export type KategoriId =
-  | 'billig'
-  | 'fitness'
-  | 'boernefavorit'
-  | 'hverdag'
-  | 'storportion';
+  | 'aftensmad'
+  | 'suppe'
+  | 'salat'
+  | 'broed'
+  | 'dessert';
 
 export const KATEGORIER: Array<{ id: KategoriId; navn: string; emoji: string }> = [
-  { id: 'billig',        navn: 'Billigt',                emoji: '💸' },
-  { id: 'fitness',       navn: 'Fitness mad',            emoji: '💪' },
-  { id: 'boernefavorit', navn: 'Børnefavoritter',        emoji: '🧒' },
-  { id: 'hverdag',       navn: 'Nem & hurtig hverdag',   emoji: '🍳' },
-  { id: 'storportion',   navn: 'Store portioner',        emoji: '🍲' },
+  { id: 'aftensmad', navn: 'Aftensmad', emoji: '🍽️' },
+  { id: 'suppe',     navn: 'Suppe',     emoji: '🥣' },
+  { id: 'salat',     navn: 'Salater',   emoji: '🥗' },
+  { id: 'broed',     navn: 'Brød',      emoji: '🍞' },
+  { id: 'dessert',   navn: 'Desserter', emoji: '🍰' },
 ];

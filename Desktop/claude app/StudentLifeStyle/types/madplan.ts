@@ -25,6 +25,9 @@ export type Dag = {
   morgenmad: Maltid;
   frokost: Maltid;
   aftensmad: Maltid;
+  // Ekstra retter til aftensmaden samme dag (fx salat + kartoffelsalat ved
+  // siden af hovedretten). aftensmad er hovedretten; disse lægges ved siden af.
+  ekstraAftensmad?: Maltid[];
 };
 
 export type IndkoebsVare = {

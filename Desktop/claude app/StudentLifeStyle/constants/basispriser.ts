@@ -83,9 +83,28 @@ export function matcherSoegeord(tekst: string, soegeord: string): boolean {
     ' ' + s.toLowerCase().replace(/[^a-z0-9æøåé]+/g, ' ').trim() + ' ';
   const t = norm(tekst);
   const k = norm(soegeord);
-  // Behold foranstillet mellemrum, drop afsluttende → søgeordet skal
-  // starte et ord, men må gerne være starten af et længere ord
-  return t.includes(k.substring(0, k.length - 1));
+  // Korte, generiske søgeord (≤3 tegn: is, æg, ost, mel, løg, tun, ris …) skal
+  // matche et HELT ord. Ellers rammer de tilfældigt sammensatte ord
+  // (mel→melon, is→iste, løg→løgismose) og giver forkerte priser — samme
+  // fejlklasse som oksekød-buggen. Længere ord (okse, gris, svin, laks,
+  // kylling …) må stadig være STARTEN af et ord, så 'okse'→'oksekød' virker.
+  if (k.trim().length <= 3) return t.includes(k);     // helt ord (mellemrum i begge ender)
+  return t.includes(k.substring(0, k.length - 1));    // starten af et ord
+}
+
+// Gæt søgeord for et frit indtastet ingrediensnavn ved at slå navnet op i
+// basispris-vokabularet. Bruges når brugeren SKRIVER en opskrift manuelt — så
+// ingredienserne bliver synlige for pris- og tilbuds-motoren uden at brugeren
+// selv skal vælge en kategori. Returnerer den FØRSTE matchende vares søgeord
+// (vokabularet er ordnet specifik→generel, så "hakket oksekød" rammer før
+// "oksekød", "revet ost" før "ost"); intet match → tom liste (uændret = usynlig,
+// men ingen forkert pris). Genbruger den enhedstestede matcherSoegeord.
+export function gætSoeg(navn: string): string[] {
+  if (!navn.trim()) return [];
+  for (const entry of BASISPRISER) {
+    if (entry.soeg.some(s => matcherSoegeord(navn, s))) return entry.soeg;
+  }
+  return [];
 }
 
 export function slagBasispris(navn: string): number | null {

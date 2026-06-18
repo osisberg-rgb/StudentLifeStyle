@@ -2,8 +2,8 @@
 // Beregnes ÉN gang (første opslag efter at tilbudsdataen er lagt ind /
 // appen er startet) og gemmes i cache — derefter er alle opslag gratis.
 // AI'en er aldrig involveret i prisberegning.
-import { OPSKRIFTER } from './opskrifter';
 import { slåEffektivPrisOp, aktuelUge } from './tilbudspriser';
+import { alleOpskrifter, opskrifterVersion } from '../lib/brugerOpskrifter';
 
 export type OpskriftPris = {
   pris: number;          // samlet pris med tilbud (skaleret)
@@ -18,11 +18,11 @@ export type OpskriftPris = {
 let cache: { nøgle: string; priser: Map<string, OpskriftPris> } | null = null;
 
 export function hentOpskriftPriser(butikker?: string[], personer?: number): Map<string, OpskriftPris> {
-  const nøgle = `${aktuelUge()}|${(butikker ?? []).slice().sort().join('+')}|${personer ?? 0}`;
+  const nøgle = `${aktuelUge()}|${(butikker ?? []).slice().sort().join('+')}|${personer ?? 0}|v${opskrifterVersion()}`;
   if (cache && cache.nøgle === nøgle) return cache.priser;
 
   const priser = new Map<string, OpskriftPris>();
-  for (const o of OPSKRIFTER) {
+  for (const o of alleOpskrifter()) {
     // Skalering pr. opskrift: køb hele pakke-sæt (2 pers på en 4-portions
     // opskrift = 1× med rester; 6 pers = 2×)
     const basePortioner = o.portioner || 4;

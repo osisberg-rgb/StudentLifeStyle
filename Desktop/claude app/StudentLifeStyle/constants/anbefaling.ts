@@ -1,7 +1,7 @@
 // Ugeplan-logik: hvor mange aftensmåltider dækker en ret, og hvilke retter
 // anbefales for at fylde ugen inden for budgettet.
-import { OPSKRIFTER } from './opskrifter';
 import { hentOpskriftPriser } from './opskriftPriser';
+import type { Opskrift } from '../types/opskrift';
 
 export const UGE_MAAL = 7;     // aftensmåltider en ugeplan sigter mod
 export const MAKS_RETTER = 7;  // højst én ny ret pr. dag
@@ -18,7 +18,7 @@ export function måltiderPrRet(portionerSkaleret: number, personer: number): num
 // Erstatter den gamle kombinations-søgning, som ikke skalerer til 7 retter
 // (C(32,7) ≈ 3,4 mio. kombinationer).
 export function findAnbefaledeRetter(
-  retter: typeof OPSKRIFTER,
+  retter: Opskrift[],
   budget: number,
   butikker: string[] | undefined,
   personer: number,
