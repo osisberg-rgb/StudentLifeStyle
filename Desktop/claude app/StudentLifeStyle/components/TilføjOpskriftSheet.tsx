@@ -1,9 +1,11 @@
 // Halvskærms bund-ark der åbnes af den centrale "+"-knap. Lader brugeren vælge
 // HVORDAN en opskrift tilføjes — foto, screenshot, link eller skriv selv —
 // inspireret af ReciMes "Add a recipe". Selve flowet håndteres af kalderen
-// (App.tsx) via onVælg.
+// (App.tsx) via onVælg. Kan trækkes ned for at lukke (react-native-gesture-handler;
+// PanResponder virker ikke pålideligt inde i en RN Modal på Android).
 import React, { useRef, useEffect } from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity, Animated, PanResponder } from 'react-native';
+import { Modal, View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { GestureHandlerRootView, PanGestureHandler, State } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radii } from '../constants/theme';
 
@@ -23,55 +25,59 @@ const VALG: { key: TilføjMetode; ikon: keyof typeof Ionicons.glyphMap; titel: s
 ];
 
 export default function TilføjOpskriftSheet({ synlig, onVælg, onLuk }: Props) {
-  // Træk-ned-for-at-lukke: arket følger fingeren nedad og lukker hvis man
-  // trækker langt nok (eller flicker hurtigt); ellers springer det tilbage.
-  const translateY = useRef(new Animated.Value(0)).current;
-  useEffect(() => { if (synlig) translateY.setValue(0); }, [synlig, translateY]);
+  // Træk-ned-for-at-lukke. dragY = rå træk-afstand; translateY klamper opad-træk
+  // til 0, så arket kun kan trækkes NED. Lukker hvis man trækker forbi ~120px
+  // eller flicker hurtigt; ellers springer det tilbage.
+  const dragY = useRef(new Animated.Value(0)).current;
+  const translateY = dragY.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolateLeft: 'clamp' });
+  useEffect(() => { if (synlig) dragY.setValue(0); }, [synlig, dragY]);
 
-  const panResponder = PanResponder.create({
-    // Brug CAPTURE-fasen: arket opfanger en tydelig NEDADGÅENDE træk-bevægelse
-    // FØR kortene — ellers holder kortets TouchableOpacity på touch'en når man
-    // begynder trækket oven på et kort. Et almindeligt tryk (uden bevægelse)
-    // når aldrig tærsklen, så kortene kan stadig trykkes.
-    onMoveShouldSetPanResponderCapture: (_, g) => g.dy > 6 && g.dy > Math.abs(g.dx),
-    onPanResponderTerminationRequest: () => false,
-    onPanResponderMove: (_, g) => { if (g.dy > 0) translateY.setValue(g.dy); },
-    onPanResponderRelease: (_, g) => {
-      if (g.dy > 120 || g.vy > 0.6) {
-        Animated.timing(translateY, { toValue: 600, duration: 180, useNativeDriver: false })
-          .start(() => onLuk());
-      } else {
-        Animated.spring(translateY, { toValue: 0, useNativeDriver: false, bounciness: 4 }).start();
-      }
-    },
-  });
+  const onGestureEvent = Animated.event([{ nativeEvent: { translationY: dragY } }], { useNativeDriver: true });
+
+  function onStateChange(e: { nativeEvent: { state: number; translationY: number; velocityY: number } }) {
+    if (e.nativeEvent.state !== State.END) return;
+    const { translationY, velocityY } = e.nativeEvent;
+    if (translationY > 120 || velocityY > 800) {
+      Animated.timing(dragY, { toValue: 600, duration: 180, useNativeDriver: true })
+        .start(() => { onLuk(); dragY.setValue(0); });
+    } else {
+      Animated.spring(dragY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+    }
+  }
 
   return (
     <Modal visible={synlig} transparent animationType="slide" onRequestClose={onLuk}>
-      <View style={styles.overlay}>
-        {/* Dæmpet baggrund — tryk lukker */}
-        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onLuk} />
-        <Animated.View style={[styles.ark, { transform: [{ translateY }] }]} {...panResponder.panHandlers}>
-          <View style={styles.greb} />
-          <Text style={styles.titel}>Tilføj opskrift</Text>
-          <View style={styles.grid}>
-            {VALG.map(v => (
-              <TouchableOpacity
-                key={v.key}
-                style={styles.kort}
-                activeOpacity={0.85}
-                onPress={() => onVælg(v.key)}
-              >
-                <View style={styles.ikonCirkel}>
-                  <Ionicons name={v.ikon} size={22} color={Colors.green} />
-                </View>
-                <Text style={styles.kortTitel}>{v.titel}</Text>
-                <Text style={styles.kortSub}>{v.sub}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Animated.View>
-      </View>
+      {/* GestureHandlerRootView er PÅKRÆVET inde i en RN Modal for at gestures virker */}
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <View style={styles.overlay}>
+          {/* Dæmpet baggrund — tryk lukker */}
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onLuk} />
+          {/* activeOffsetY: panen aktiveres først ved >12px NEDADGÅENDE træk, så
+              et almindeligt tryk på kortene stadig registreres som tryk */}
+          <PanGestureHandler onGestureEvent={onGestureEvent} onHandlerStateChange={onStateChange} activeOffsetY={12}>
+            <Animated.View style={[styles.ark, { transform: [{ translateY }] }]}>
+              <View style={styles.greb} />
+              <Text style={styles.titel}>Tilføj opskrift</Text>
+              <View style={styles.grid}>
+                {VALG.map(v => (
+                  <TouchableOpacity
+                    key={v.key}
+                    style={styles.kort}
+                    activeOpacity={0.85}
+                    onPress={() => onVælg(v.key)}
+                  >
+                    <View style={styles.ikonCirkel}>
+                      <Ionicons name={v.ikon} size={22} color={Colors.green} />
+                    </View>
+                    <Text style={styles.kortTitel}>{v.titel}</Text>
+                    <Text style={styles.kortSub}>{v.sub}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </Animated.View>
+          </PanGestureHandler>
+        </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
