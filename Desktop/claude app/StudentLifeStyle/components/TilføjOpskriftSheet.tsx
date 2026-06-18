@@ -2,8 +2,8 @@
 // HVORDAN en opskrift tilføjes — foto, screenshot, link eller skriv selv —
 // inspireret af ReciMes "Add a recipe". Selve flowet håndteres af kalderen
 // (App.tsx) via onVælg.
-import React from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { Modal, View, Text, StyleSheet, TouchableOpacity, Animated, PanResponder } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radii } from '../constants/theme';
 
@@ -23,10 +23,32 @@ const VALG: { key: TilføjMetode; ikon: keyof typeof Ionicons.glyphMap; titel: s
 ];
 
 export default function TilføjOpskriftSheet({ synlig, onVælg, onLuk }: Props) {
+  // Træk-ned-for-at-lukke: arket følger fingeren nedad og lukker hvis man
+  // trækker langt nok (eller flicker hurtigt); ellers springer det tilbage.
+  const translateY = useRef(new Animated.Value(0)).current;
+  useEffect(() => { if (synlig) translateY.setValue(0); }, [synlig, translateY]);
+
+  const panResponder = PanResponder.create({
+    // Overtag kun ved en tydelig NEDADGÅENDE træk-bevægelse, så tryk på
+    // kortene stadig registreres som tryk
+    onMoveShouldSetPanResponder: (_, g) => g.dy > 6 && g.dy > Math.abs(g.dx),
+    onPanResponderMove: (_, g) => { if (g.dy > 0) translateY.setValue(g.dy); },
+    onPanResponderRelease: (_, g) => {
+      if (g.dy > 120 || g.vy > 0.6) {
+        Animated.timing(translateY, { toValue: 600, duration: 180, useNativeDriver: false })
+          .start(() => onLuk());
+      } else {
+        Animated.spring(translateY, { toValue: 0, useNativeDriver: false, bounciness: 4 }).start();
+      }
+    },
+  });
+
   return (
     <Modal visible={synlig} transparent animationType="slide" onRequestClose={onLuk}>
-      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onLuk}>
-        <TouchableOpacity activeOpacity={1} style={styles.ark} onPress={() => {}}>
+      <View style={styles.overlay}>
+        {/* Dæmpet baggrund — tryk lukker */}
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onLuk} />
+        <Animated.View style={[styles.ark, { transform: [{ translateY }] }]} {...panResponder.panHandlers}>
           <View style={styles.greb} />
           <Text style={styles.titel}>Tilføj opskrift</Text>
           <View style={styles.grid}>
@@ -45,8 +67,8 @@ export default function TilføjOpskriftSheet({ synlig, onVælg, onLuk }: Props) 
               </TouchableOpacity>
             ))}
           </View>
-        </TouchableOpacity>
-      </TouchableOpacity>
+        </Animated.View>
+      </View>
     </Modal>
   );
 }
