@@ -79,10 +79,10 @@ const TILBUDS_KATEGORIER = [
 ] as const;
 
 // Retter man kan vælge som favoritter i onboardingen — hovedretterne
-// (alt der ikke er tagget suppe/salat/brød/dessert).
+// (alt der ikke er tagget salat/brød/dessert; supper tæller som aftensmad).
 const FAVORIT_VALG = OPSKRIFTER.filter(o => {
   const kat = (o as any).kategorier as string[] | undefined;
-  return !(kat?.includes('suppe') || kat?.includes('salat') || kat?.includes('broed') || kat?.includes('dessert'));
+  return !(kat?.includes('salat') || kat?.includes('broed') || kat?.includes('dessert'));
 });
 
 // De tre dage 3-dages-planen udfyldes på (label til skærmen)

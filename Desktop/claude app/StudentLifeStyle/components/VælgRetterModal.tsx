@@ -113,8 +113,8 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
               ? !!o.importeret
               : (valgtKogebog ? opskrifterIKogebog(valgtKogebog).includes(o.id) : false)
             : kategori === 'aftensmad'
-              // Aftensmad = alt der ikke er tagget suppe, salat eller brød
-              ? !(kat?.includes('suppe') || kat?.includes('salat') || kat?.includes('broed') || kat?.includes('dessert'))
+              // Aftensmad = alt der ikke er tagget salat, brød eller dessert (suppe tæller som aftensmad)
+              ? !(kat?.includes('salat') || kat?.includes('broed') || kat?.includes('dessert'))
               : kat?.includes(kategori));
     const matcherSøg = !søgQ
       || o.navn.toLowerCase().includes(søgQ)
