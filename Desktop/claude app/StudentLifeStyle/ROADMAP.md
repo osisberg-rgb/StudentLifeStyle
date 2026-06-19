@@ -131,6 +131,14 @@ Koden er færdig før indholdet — det er indholdet, der ER produktet.
       efter gem bumpes en nonce så gridet straks viser den nye ret. tsc rent.
       ENESTE UDESTÅENDE: kør migration-SQL i Supabase dashboard (CLI ikke linket),
       så tabellen findes — derefter virker hele flowet end-to-end.
+- [x] **Kogebøger (samlinger + foto-bulk)** BYGGET (19. jun): navngivne samlinger
+      af egne OG indbyggede opskrifter (én kogebog pr. opskrift). Migration
+      `005_kogeboeger.sql` (kogeboeger + kogebog_medlemskab, RLS, kørt live),
+      store `lib/kogebøger.ts` (a la favoritter, hentes ved opstart). "📚 Kogebøger"-
+      reol + drill-in i VælgRetterModal, "Læg i kogebog" i OpskriftDetaljeModal,
+      nye `NavngivModal`/`VælgKogebogModal`. Foto-bulk: `ImportKogebogModal` kører flere
+      sidefotos sekventielt gennem `importer-opskrift` (ét billede = én opskrift,
+      maks 10) → batch-review → gem alle i kogebog. tsc rent. Hjemmeside-crawl udskudt.
 - [ ] 100 opskrifter (fra 32) — alle med tid, kategorier og søgeord
 - [ ] Minimum 25 opskrifter i Børnefavoritter
 - [ ] Foto på minimum 60 opskrifter (24 findes)
@@ -289,3 +297,4 @@ Tallet flyttes af brugerantal og fastholdelse — ikke af prisen.
 | 18. jun 2026 | **Pris-motor hærdet:** tag-audit (special-/pr-enhed-varer der underbød rettet), `matcherSoegeord` strammet (≤3-tegns ord = hele ord, stopper mel→melon), `erPrEnhed` udelukker pr-100g/stk fra prissætning. Regressions-test `scripts/test-matchning.mjs` (kan køre — ingen RN-import). |
 | 18. jun 2026 | **Tilbudsaviser hostet** i Supabase Storage (PDF+cover), åbnes in-app (`expo-web-browser`). Central + i tab-bar → halvskærms-ark (foto/screenshot/link/skriv selv) der går direkte ind i metoden. Favoritter på forsiden kan lægges på madplan / indkøbsliste. Opskrifter: import (link/foto/screenshot), skriv selv, rediger egne, Desserter-kategori, søgning. |
 | 14. jun 2026 | **Indkøbslisten er nu manuel, ikke automatisk.** `byggUgeplan` lægger ikke længere alle planens varer i listen ved generering — den starter TOM (indkoebsliste: [], pris/besparelse 0). Varer tilføjes kun når brugeren åbner en opskrift (dag-kort → OpskriftModal, eller opskrift-detalje) og trykker "Tilføj til indkøbsliste", eller via tilbuds-browseren/+ arket. Byt-en-ret rører heller ikke listen mere (kun planen/dagene ændres). Begrundelse: listen skal afspejle hvad familien faktisk vil købe — ikke hele ugeplanen. "Tilbud brugt"-tællingen (fra plan.indkoebsliste-JSON) vokser i takt med at man tilføjer. Forsidens uge-kort viser en hjælpetekst når listen er tom. |
+| 19. jun 2026 | **Kogebøger (samlinger + foto-bulk):** brugeren samler opskrifter — egne OG indbyggede — i navngivne kogebøger (én pr. opskrift). Datamodel: `kogeboeger` + `kogebog_medlemskab` (per bruger, RLS; `opskrift_id` tekst dækker begge slags; primærnøgle (user_id,opskrift_id) håndhæver én-pr-opskrift), klient-store `lib/kogebøger.ts` a la favoritter. Browsing: "📚 Kogebøger"-reol + drill-in i ret-vælgeren; "Læg i kogebog" i opskrift-detaljen. Foto-bulk: nyt ark-valg → `ImportKogebogModal` kører flere sidefotos sekventielt gennem den eksisterende `importer-opskrift` (ét billede = én opskrift, maks 10) → batch-review → gem alle i kogebogen. Klient-side løkke (ikke ny edge-funktion) — undgår tidsgrænse. Hjemmeside-crawl bevidst udskudt. Spec/plan i `docs/superpowers/`. |
