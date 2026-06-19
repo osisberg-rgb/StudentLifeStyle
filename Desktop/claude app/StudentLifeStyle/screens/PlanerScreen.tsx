@@ -431,7 +431,7 @@ export default function PlanerScreen() {
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
-        <Text style={styles.title}>Madplaner</Text>
+        <Text style={styles.title}>Uge plan</Text>
         <TouchableOpacity
           style={styles.nyPlanKnap}
           onPress={() => setVælgerSynlig(true)}
