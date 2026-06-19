@@ -61,7 +61,6 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
   const [valgtKogebog, setValgtKogebog] = useState<string | null>(null);
   // Opret/omdøb-navngivning (omdøb sætter et id; opret = null-id)
   const [navngiv, setNavngiv] = useState<{ id: string | null; start: string } | null>(null);
-  const [kunHurtige, setKunHurtige] = useState(false);
   const [søg, setSøg] = useState('');
   // "+"-arket (halvskærm, 4 valg) → samme flow som den centrale +-knap
   const [sheetÅben, setSheetÅben] = useState(false);
@@ -112,7 +111,7 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
     const matcherSøg = !søgQ
       || o.navn.toLowerCase().includes(søgQ)
       || (o.ingredienser ?? []).some((i: any) => (i.navn ?? '').toLowerCase().includes(søgQ));
-    return matcherKategori && matcherSøg && (!kunHurtige || ((o as any).minutter ?? 99) <= 30);
+    return matcherKategori && matcherSøg;
   });
   const viste = filtrerede;
 
@@ -214,7 +213,6 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
     setValgte([]);
     setKategori(null);
     setValgtKogebog(null);
-    setKunHurtige(false);
     onLuk();
   }
 
@@ -222,7 +220,6 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
     setValgte([]);
     setKategori(null);
     setValgtKogebog(null);
-    setKunHurtige(false);
     onLuk();
   }
 
@@ -286,40 +283,6 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
               </TouchableOpacity>
             )}
           </View>
-        </View>
-
-        {/* Antal personer + tidsfilter */}
-        <View style={styles.personerRække}>
-          <View style={styles.personerVenstre}>
-          <Text style={styles.personerLabel}>👥 Personer</Text>
-          <View style={styles.stepper}>
-            <TouchableOpacity
-              style={[styles.stepKnap, personer <= 1 && styles.stepKnapDisabled]}
-              onPress={() => onPersonerChange(Math.max(1, personer - 1))}
-              disabled={personer <= 1}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={styles.stepTekst}>−</Text>
-            </TouchableOpacity>
-            <Text style={styles.personerVærdi}>{personer}</Text>
-            <TouchableOpacity
-              style={[styles.stepKnap, personer >= 8 && styles.stepKnapDisabled]}
-              onPress={() => onPersonerChange(Math.min(8, personer + 1))}
-              disabled={personer >= 8}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={styles.stepTekst}>+</Text>
-            </TouchableOpacity>
-          </View>
-          </View>
-          <TouchableOpacity
-            style={[styles.tidChip, kunHurtige && styles.tidChipAktiv]}
-            onPress={() => setKunHurtige(v => !v)}
-          >
-            <Text style={[styles.tidChipTekst, kunHurtige && styles.tidChipTekstAktiv]}>
-              ⏱ Maks 30 min
-            </Text>
-          </TouchableOpacity>
         </View>
 
         {/* Kategori-chips */}
@@ -641,39 +604,12 @@ const styles = StyleSheet.create({
   søgInput: { flex: 1, fontSize: 15, fontFamily: 'Inter_400Regular', color: Colors.ink, padding: 0 },
   søgRyd: { fontSize: 14, color: Colors.inkSoft, fontFamily: 'Inter_600SemiBold', paddingHorizontal: 2 },
 
-  personerRække: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 10,
-    backgroundColor: Colors.paper,
-    borderBottomWidth: 1, borderBottomColor: Colors.line,
-  },
-  personerLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.inkSoft },
-  personerVenstre: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  tidChip: {
-    borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7,
-    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.line,
-  },
-  tidChipAktiv: { backgroundColor: Colors.green, borderColor: Colors.green },
-  tidChipTekst: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: Colors.inkSoft },
-  tidChipTekstAktiv: { color: '#fff' },
   tidBadge: {
     position: 'absolute', bottom: 6, left: 6,
     backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 4,
     paddingHorizontal: 6, paddingVertical: 2,
   },
   tidBadgeTekst: { color: '#fff', fontSize: 11, fontFamily: 'Inter_600SemiBold' },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  stepKnap: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.line,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  stepKnapDisabled: { opacity: 0.35 },
-  stepTekst: { fontSize: 16, fontFamily: 'Inter_700Bold', color: Colors.ink },
-  personerVærdi: {
-    fontSize: 16, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.ink,
-    minWidth: 22, textAlign: 'center',
-  },
 
   chipsRække: {
     backgroundColor: Colors.paper,
