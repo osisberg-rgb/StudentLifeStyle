@@ -271,7 +271,7 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
               style={styles.søgInput}
               value={søg}
               onChangeText={setSøg}
-              placeholder="Søg efter ret eller råvare…"
+              placeholder="Søg efter opskrift…"
               placeholderTextColor={Colors.inkSoft}
               autoCapitalize="none"
               autoCorrect={false}
