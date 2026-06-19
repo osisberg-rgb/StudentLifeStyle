@@ -25,6 +25,7 @@ import { harForvalgteRetter, harLandPåPlaner } from './constants/onboardingHand
 import { synkroniserTilbud } from './lib/tilbudSync';
 import { hentBrugerOpskrifter } from './lib/brugerOpskrifter';
 import { hentFavoritter } from './lib/favoritter';
+import { hentKogebøger, hentMedlemskaber } from './lib/kogebøger';
 import { hentWatchlist } from './lib/watchlist';
 import { harTilladelse, registrérForPush } from './lib/notifikationer';
 
@@ -202,10 +203,12 @@ function RootNavigator() {
       if (!data || data.household_size == null) setShowOnboarding(true);
       setProfilTjekket(true);
     });
-    // Hent brugerens importerede opskrifter + favoritter + overvågede varer ind
-    // i storen (fire-and-forget) — fejler det, virker appen videre uden dem
+    // Hent brugerens importerede opskrifter + favoritter + kogebøger + overvågede
+    // varer ind i storen (fire-and-forget) — fejler det, virker appen videre uden dem
     hentBrugerOpskrifter();
     hentFavoritter();
+    hentKogebøger();
+    hentMedlemskaber();
     hentWatchlist();
     // Opdatér push-token hvis tilladelse allerede er givet (ingen prompt her)
     harTilladelse().then(ok => { if (ok) registrérForPush(); });
