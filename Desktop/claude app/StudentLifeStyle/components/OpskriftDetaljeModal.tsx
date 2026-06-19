@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
   Modal, View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, SafeAreaView, ActivityIndicator, ImageBackground,
+  TouchableOpacity, SafeAreaView, ActivityIndicator, ImageBackground, Alert,
 } from 'react-native';
 import { Colors, Radii } from '../constants/theme';
 import { slåEffektivPrisOp } from '../constants/tilbudspriser';
 import { billedeFor } from '../constants/opskriftBilleder';
 import { erFavorit, sætFavorit } from '../lib/favoritter';
 import KlokkeKnap from './KlokkeKnap';
+import VælgKogebogModal from './VælgKogebogModal';
+import { kogebogForOpskrift, sætKogebogForOpskrift, kogebøgerVersion } from '../lib/kogebøger';
 import { hentWatchlist, termFraFritekst } from '../lib/watchlist';
 import type { Opskrift } from '../types/opskrift';
 
@@ -40,6 +42,22 @@ export default function OpskriftDetaljeModal({ opskrift, butikker, personer, onL
   }, [opskrift?.id]);
   // Hent overvågede varer når modalen åbnes, så 🔔 på ingredienser viser korrekt
   useEffect(() => { if (opskrift) hentWatchlist(); }, [opskrift?.id]);
+
+  // Hvilken kogebog ligger opskriften i? Synkroniseres når en ny åbnes, og
+  // når kogebog-storen ændrer sig (kogebøgerVersion bumpes ved valg/opret).
+  const [kogebogÅben, setKogebogÅben] = useState(false);
+  const [kogebogNavn, setKogebogNavn] = useState<string | null>(null);
+  useEffect(() => {
+    setKogebogNavn(opskrift ? (kogebogForOpskrift(opskrift.id)?.navn ?? null) : null);
+  }, [opskrift?.id, kogebøgerVersion()]);
+
+  async function vælgKogebog(kogebogId: string | null) {
+    if (!opskrift) return;
+    setKogebogÅben(false);
+    const ok = await sætKogebogForOpskrift(opskrift.id, kogebogId);
+    if (ok) setKogebogNavn(kogebogId ? (kogebogForOpskrift(opskrift.id)?.navn ?? null) : null);
+    else Alert.alert('Fejl', 'Kunne ikke gemme. Er du logget ind?');
+  }
 
   if (!opskrift) return null;
 
@@ -113,6 +131,15 @@ export default function OpskriftDetaljeModal({ opskrift, butikker, personer, onL
           </View>
 
           <View style={styles.indholdPadding}>
+          {/* Kogebog-tilhørsforhold */}
+          <TouchableOpacity style={styles.kogebogRække} onPress={() => setKogebogÅben(true)}>
+            <Text style={styles.kogebogIkon}>📚</Text>
+            <Text style={styles.kogebogTekst} numberOfLines={1}>
+              {kogebogNavn ? kogebogNavn : 'Læg i kogebog'}
+            </Text>
+            <Text style={styles.kogebogSkift}>{kogebogNavn ? 'Skift' : 'Vælg'}</Text>
+          </TouchableOpacity>
+
           {/* Ingredienser */}
           <Text style={styles.sektionTitel}>Ingredienser</Text>
           <View style={styles.ingrediensKort}>
@@ -193,6 +220,13 @@ export default function OpskriftDetaljeModal({ opskrift, butikker, personer, onL
             )}
           </View>
         )}
+
+        <VælgKogebogModal
+          synlig={kogebogÅben}
+          valgtKogebogId={opskrift ? (kogebogForOpskrift(opskrift.id)?.id ?? null) : null}
+          onVælg={vælgKogebog}
+          onLuk={() => setKogebogÅben(false)}
+        />
       </SafeAreaView>
     </Modal>
   );
@@ -294,4 +328,12 @@ const styles = StyleSheet.create({
   redigerKnapTekst: { color: Colors.green, fontSize: 15, fontFamily: 'Inter_700Bold' },
   sletKnap: { borderColor: Colors.red, paddingHorizontal: 24 },
   sletKnapTekst: { color: Colors.red, fontSize: 15, fontFamily: 'Inter_700Bold' },
+  kogebogRække: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: Colors.card, borderRadius: Radii.card,
+    borderWidth: 1, borderColor: Colors.line, padding: 14, marginBottom: 20,
+  },
+  kogebogIkon: { fontSize: 18 },
+  kogebogTekst: { flex: 1, fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.ink },
+  kogebogSkift: { fontSize: 13, fontFamily: 'Inter_700Bold', color: Colors.green },
 });
