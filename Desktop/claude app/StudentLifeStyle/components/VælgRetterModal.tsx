@@ -18,7 +18,7 @@ import TilføjOpskriftSheet, { TilføjMetode } from './TilføjOpskriftSheet';
 import ImportKogebogModal from './ImportKogebogModal';
 import { erFavorit } from '../lib/favoritter';
 import {
-  kogebøger, opskrifterIKogebog, antalIKogebog,
+  kogebøger, opskrifterIKogebog, antalIKogebog, kogebogForOpskrift,
   opretKogebog, omdøbKogebog, sletKogebog, sætKogebogForOpskrift,
 } from '../lib/kogebøger';
 import NavngivModal from './NavngivModal';
@@ -27,6 +27,13 @@ import type { Opskrift } from '../types/opskrift';
 // Ud over de statiske kategorier kan man filtrere på sine favoritter og
 // sine egne importerede opskrifter
 type Filter = KategoriId | 'favoritter' | 'mine' | 'kogeboeger';
+
+// Virtuelle "kogebøger" i reolen: alle egne opskrifter / dem uden kogebog.
+// Genbruger drill-in (valgtKogebog) via sentinel-id'er.
+const ALLE_MINE = '__alle_mine__';
+const UDEN_KOGEBOG = '__uden_kogebog__';
+const erRigtigKogebog = (id: string | null): id is string =>
+  !!id && id !== ALLE_MINE && id !== UDEN_KOGEBOG;
 
 const KOED_EMOJI: Record<string, string> = {
   Kylling: '🐔',
@@ -103,7 +110,11 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
         : kategori === 'mine'
           ? !!o.importeret
           : kategori === 'kogeboeger'
-            ? (valgtKogebog ? opskrifterIKogebog(valgtKogebog).includes(o.id) : false)
+            ? valgtKogebog === ALLE_MINE
+              ? !!o.importeret
+              : valgtKogebog === UDEN_KOGEBOG
+                ? (!!o.importeret && !kogebogForOpskrift(o.id))
+                : (valgtKogebog ? opskrifterIKogebog(valgtKogebog).includes(o.id) : false)
             : kategori === 'aftensmad'
               // Aftensmad = alt der ikke er tagget suppe, salat eller brød
               ? !(kat?.includes('suppe') || kat?.includes('salat') || kat?.includes('broed') || kat?.includes('dessert'))
@@ -301,12 +312,6 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
               <Text style={[styles.chipTekst, kategori === 'favoritter' && styles.chipTekstAktiv]}>❤️ Favoritter</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.chip, kategori === 'mine' && styles.chipAktiv]}
-              onPress={() => vælgKategori(kategori === 'mine' ? null : 'mine')}
-            >
-              <Text style={[styles.chipTekst, kategori === 'mine' && styles.chipTekstAktiv]}>🔗 Dine opskrifter</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
               style={[styles.chip, kategori === 'kogeboeger' && styles.chipAktiv]}
               onPress={vælgKogebøger}
             >
@@ -334,6 +339,25 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
                 <Text style={styles.nyKogebogPlus}>＋</Text>
                 <Text style={styles.nyKogebogTekst}>Ny kogebog</Text>
               </TouchableOpacity>
+
+              {/* Virtuelle samlinger: alle egne opskrifter / dem uden kogebog */}
+              <TouchableOpacity style={styles.kogebogKort} onPress={() => setValgtKogebog(ALLE_MINE)}>
+                <Text style={styles.kogebogKortEmoji}>🔗</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.kogebogKortNavn}>Alle dine opskrifter</Text>
+                  <Text style={styles.kogebogKortAntal}>{tilgængelige.filter(o => o.importeret).length} opskrifter</Text>
+                </View>
+                <Text style={styles.kogebogKortPil}>›</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.kogebogKort} onPress={() => setValgtKogebog(UDEN_KOGEBOG)}>
+                <Text style={styles.kogebogKortEmoji}>📂</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.kogebogKortNavn}>Uden kogebog</Text>
+                  <Text style={styles.kogebogKortAntal}>{tilgængelige.filter(o => o.importeret && !kogebogForOpskrift(o.id)).length} opskrifter</Text>
+                </View>
+                <Text style={styles.kogebogKortPil}>›</Text>
+              </TouchableOpacity>
+
               {kogebøger().length === 0 ? (
                 <Text style={styles.reolTom}>Ingen kogebøger endnu. Opret en, eller åbn en opskrift og tryk "Læg i kogebog".</Text>
               ) : (
@@ -361,7 +385,9 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
             <TouchableOpacity style={styles.drillHeader} onPress={() => setValgtKogebog(null)}>
               <Text style={styles.drillTilbage}>‹ Alle kogebøger</Text>
               <Text style={styles.drillNavn} numberOfLines={1}>
-                {kogebøger().find(k => k.id === valgtKogebog)?.navn ?? ''}
+                {valgtKogebog === ALLE_MINE ? 'Alle dine opskrifter'
+                  : valgtKogebog === UDEN_KOGEBOG ? 'Uden kogebog'
+                  : kogebøger().find(k => k.id === valgtKogebog)?.navn ?? ''}
               </Text>
             </TouchableOpacity>
           )}
@@ -380,7 +406,11 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
                     : kategori === 'mine'
                       ? 'Du har ingen egne opskrifter endnu — tryk "+ Tilføj opskrift" øverst'
                       : kategori === 'kogeboeger'
-                        ? 'Denne kogebog er tom — tryk "+ Tilføj opskrift", eller åbn en opskrift og tryk "Læg i kogebog"'
+                        ? valgtKogebog === ALLE_MINE
+                          ? 'Du har ingen egne opskrifter endnu — tryk "+ Tilføj opskrift"'
+                          : valgtKogebog === UDEN_KOGEBOG
+                            ? 'Ingen usorterede opskrifter — alle dine ligger i en kogebog'
+                            : 'Denne kogebog er tom — tryk "+ Tilføj opskrift", eller åbn en opskrift og tryk "Læg i kogebog"'
                         : 'Ingen retter i denne kategori endnu'}
               </Text>
             </View>
@@ -530,8 +560,8 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
           onLuk={() => { setImportÅben(false); setMetode(null); }}
           onGemt={async (opskrift) => {
             setImportÅben(false); setMetode(null);
-            // Står man inde i en kogebog, lægges den nye opskrift dér med det samme
-            if (valgtKogebog) await sætKogebogForOpskrift(opskrift.id, valgtKogebog);
+            // Står man inde i en (ægte) kogebog, lægges den nye opskrift dér med det samme
+            if (erRigtigKogebog(valgtKogebog)) await sætKogebogForOpskrift(opskrift.id, valgtKogebog);
             setImportNonce(n => n + 1);
           }}
           onSkrivSelv={() => {
@@ -568,8 +598,8 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
           erNy={erNyOpskrift}
           onLuk={() => { setRedigerOpskrift(null); setErNyOpskrift(false); }}
           onGemt={async (opskrift) => {
-            // Kun NYE opskrifter skrevet inde i en kogebog lægges dér (ikke ved redigering)
-            if (erNyOpskrift && valgtKogebog) await sætKogebogForOpskrift(opskrift.id, valgtKogebog);
+            // Kun NYE opskrifter skrevet inde i en (ægte) kogebog lægges dér (ikke ved redigering)
+            if (erNyOpskrift && erRigtigKogebog(valgtKogebog)) await sætKogebogForOpskrift(opskrift.id, valgtKogebog);
             setRedigerOpskrift(null); setErNyOpskrift(false); setImportNonce(n => n + 1);
           }}
         />
