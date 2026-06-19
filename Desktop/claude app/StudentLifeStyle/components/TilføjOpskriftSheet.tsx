@@ -15,6 +15,9 @@ type Props = {
   synlig: boolean;
   onVælg: (metode: TilføjMetode) => void;
   onLuk: () => void;
+  // Vis "Fra kogebog" (foto-bulk). Kun relevant inde i en kogebog — ikke på
+  // den globale +-knap.
+  visKogebog?: boolean;
 };
 
 const VALG: { key: TilføjMetode; ikon: keyof typeof Ionicons.glyphMap; titel: string; sub: string }[] = [
@@ -25,7 +28,8 @@ const VALG: { key: TilføjMetode; ikon: keyof typeof Ionicons.glyphMap; titel: s
   { key: 'kogebog', ikon: 'library-outline', titel: 'Fra kogebog',      sub: 'Flere sidefotos på én gang' },
 ];
 
-export default function TilføjOpskriftSheet({ synlig, onVælg, onLuk }: Props) {
+export default function TilføjOpskriftSheet({ synlig, onVælg, onLuk, visKogebog }: Props) {
+  const valg = visKogebog ? VALG : VALG.filter(v => v.key !== 'kogebog');
   // Træk-ned-for-at-lukke. dragY = rå træk-afstand; translateY klamper opad-træk
   // til 0, så arket kun kan trækkes NED. Lukker hvis man trækker forbi ~120px
   // eller flicker hurtigt; ellers springer det tilbage.
@@ -60,7 +64,7 @@ export default function TilføjOpskriftSheet({ synlig, onVælg, onLuk }: Props) 
               <View style={styles.greb} />
               <Text style={styles.titel}>Tilføj opskrift</Text>
               <View style={styles.grid}>
-                {VALG.map(v => (
+                {valg.map(v => (
                   <TouchableOpacity
                     key={v.key}
                     style={styles.kort}

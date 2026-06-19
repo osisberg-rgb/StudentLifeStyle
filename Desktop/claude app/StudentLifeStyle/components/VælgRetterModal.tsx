@@ -543,6 +543,7 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
           synlig={sheetÅben}
           onVælg={vælgMetode}
           onLuk={() => setSheetÅben(false)}
+          visKogebog={kategori === 'kogeboeger' && !!valgtKogebog}
         />
 
         <ImportOpskriftModal
