@@ -99,8 +99,10 @@ const OLIVE = Colors.greenBright; // bladet
 
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', justifyContent: 'center' },
-  tekst: { marginTop: 20, fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.ink },
-  hint: { marginTop: 6, fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.inkSoft },
+  // paddingHorizontal: giver glyfferne luft, så Android ikke klipper sidste
+  // bogstav af en centreret enkeltlinje (sub-pixel-afrunding af tekstbredden).
+  tekst: { marginTop: 20, paddingHorizontal: 8, fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.ink, textAlign: 'center' },
+  hint: { marginTop: 6, paddingHorizontal: 8, fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, textAlign: 'center' },
 
   potLoader: { width: 96, height: 96, position: 'relative' },
 
