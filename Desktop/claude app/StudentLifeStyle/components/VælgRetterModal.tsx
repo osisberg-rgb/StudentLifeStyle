@@ -394,7 +394,7 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
               </Text>
               <Text style={styles.tomKategoriTekst}>
                 {søgQ
-                  ? `Ingen retter matcher "${søg.trim()}"`
+                  ? `Ingen opskrifter matcher "${søg.trim()}"`
                   : kategori === 'favoritter'
                     ? 'Ingen favoritter endnu — åbn en opskrift og tryk på hjertet ❤️'
                     : kategori === 'mine'
@@ -403,7 +403,7 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
                         ? valgtKogebog === ALLE_MINE
                           ? 'Du har ingen egne opskrifter endnu — tryk "+ Tilføj opskrift"'
                           : 'Denne kogebog er tom — tryk "+ Tilføj opskrift", eller åbn en opskrift og tryk "Læg i kogebog"'
-                        : 'Ingen retter i denne kategori endnu'}
+                        : 'Ingen opskrifter i denne kategori endnu'}
               </Text>
             </View>
           )}
@@ -509,7 +509,7 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
           {!enkeltValg && aktivValgte.length > 1 && (
             <View style={styles.totalRække}>
               <Text style={styles.totalLabel}>
-                {aktivValgte.length} retter · lægges på samme dag
+                {aktivValgte.length} opskrifter · lægges på samme dag
               </Text>
             </View>
           )}
@@ -520,9 +520,9 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
           >
             <Text style={styles.genererKnapTekst}>
               {dagMode
-                ? (aktivValgte.length < 1 ? 'Vælg en ret' : `Læg på ${målDag!.dagNavn}`)
+                ? (aktivValgte.length < 1 ? 'Vælg en opskrift' : `Læg på ${målDag!.dagNavn}`)
                 : aktivValgte.length < 1
-                  ? 'Vælg mindst 1 ret'
+                  ? 'Vælg mindst 1 opskrift'
                   : 'Vælg dag'}
             </Text>
           </TouchableOpacity>
