@@ -19,3 +19,16 @@ export function tagForvalgteRetter(): string[] | null {
   forvalgte = null;
   return f;
 }
+
+// Onboardingen kan også bygge en færdig 3-dages madplan og gemme den direkte.
+// Så skal vi bare LANDE i Planer (ikke åbne vælgeren) — dette flag styrer
+// App.tsx's initialRouteName. Kun i hukommelsen, samme app-session.
+let landPlaner = false;
+
+export function sætLandPåPlaner() {
+  landPlaner = true;
+}
+
+export function harLandPåPlaner(): boolean {
+  return landPlaner;
+}

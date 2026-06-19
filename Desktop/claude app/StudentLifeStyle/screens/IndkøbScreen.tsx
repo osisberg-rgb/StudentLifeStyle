@@ -11,6 +11,7 @@ import { IndkoebsButik, IndkoebsVare } from '../types/madplan';
 import { TilbudsTræf } from '../constants/tilbudSøg';
 import { fletTilbudIListe, fletFriVareIListe } from '../lib/indkøbsliste';
 import { sætValgtUge, hentValgtUge } from '../constants/ugeState';
+import { getWeekNumber } from '../constants/uge';
 import KlokkeKnap from '../components/KlokkeKnap';
 import { hentWatchlist, termFraFritekst } from '../lib/watchlist';
 
@@ -278,12 +279,6 @@ function UgeVælger({ uge, onSkift }: { uge: number; onSkift: (retning: number) 
       </TouchableOpacity>
     </View>
   );
-}
-
-function getWeekNumber() {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 1);
-  return Math.ceil((((now.getTime() - start.getTime()) / 86400000) + start.getDay() + 1) / 7);
 }
 
 const styles = StyleSheet.create({

@@ -22,6 +22,7 @@ import { tagForvalgteRetter } from '../constants/onboardingHandoff';
 import { sætValgtUge, hentValgtUge } from '../constants/ugeState';
 import { billedeFor } from '../constants/opskriftBilleder';
 import { tælTilbudsMatch } from '../constants/tilbudsMatch';
+import { getWeekNumber } from '../constants/uge';
 
 export default function PlanerScreen() {
   const [madplan, setMadplan] = useState<Madplan | null>(null);
@@ -703,12 +704,6 @@ export default function PlanerScreen() {
 }
 
 
-
-function getWeekNumber() {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 1);
-  return Math.ceil((((now.getTime() - start.getTime()) / 86400000) + start.getDay() + 1) / 7);
-}
 
 // Slå opskriften op ud fra måltidsnavnet — samme opslag som forsiden
 // bruger til "I aften"-kortet, så billede og tid altid matcher

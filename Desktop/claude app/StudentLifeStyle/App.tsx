@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler';
 import React, { useState, useEffect } from 'react';
-import { View, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -21,7 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Colors } from './constants/theme';
 import { supabase } from './lib/supabase';
-import { harForvalgteRetter } from './constants/onboardingHandoff';
+import { harForvalgteRetter, harLandPåPlaner } from './constants/onboardingHandoff';
 import { synkroniserTilbud } from './lib/tilbudSync';
 import { hentBrugerOpskrifter } from './lib/brugerOpskrifter';
 import { hentFavoritter } from './lib/favoritter';
@@ -37,6 +37,7 @@ import ProfilScreen from './screens/ProfilScreen';
 import ImportOpskriftModal from './components/ImportOpskriftModal';
 import RedigerOpskriftModal from './components/RedigerOpskriftModal';
 import TilføjOpskriftSheet, { TilføjMetode } from './components/TilføjOpskriftSheet';
+import Loader from './components/Loader';
 import type { Opskrift } from './types/opskrift';
 
 const Stack = createNativeStackNavigator();
@@ -115,9 +116,9 @@ function MainTabs() {
   return (
     <View style={{ flex: 1 }}>
       <Tab.Navigator
-        // Efter onboardingen lander man direkte i Planer, hvor vælgeren åbner
-        // med de anbefalede retter fra aha-skærmen præ-valgt
-        initialRouteName={harForvalgteRetter() ? 'Planer' : 'Hjem'}
+        // Efter onboardingen lander man direkte i Planer — enten med vælgeren
+        // præ-valgt (forvalgte retter) eller med en færdigbygget 3-dages plan
+        initialRouteName={harForvalgteRetter() || harLandPåPlaner() ? 'Planer' : 'Hjem'}
         screenOptions={({ route }) => ({
           headerShown: false,
           tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} />,
@@ -214,7 +215,7 @@ function RootNavigator() {
   if (loading || (session && !profilTjekket)) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.paper }}>
-        <ActivityIndicator size="large" color={Colors.green} />
+        <Loader tekst="Gør køkkenet klar" />
       </View>
     );
   }
@@ -262,7 +263,7 @@ export default function App() {
   if (!fontsLoaded) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.paper }}>
-        <ActivityIndicator size="large" color={Colors.green} />
+        <Loader tekst="Gør køkkenet klar" />
       </View>
     );
   }
