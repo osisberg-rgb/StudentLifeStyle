@@ -19,7 +19,7 @@ import ImportKogebogModal from './ImportKogebogModal';
 import { erFavorit } from '../lib/favoritter';
 import {
   kogebøger, opskrifterIKogebog, antalIKogebog,
-  opretKogebog, omdøbKogebog, sletKogebog,
+  opretKogebog, omdøbKogebog, sletKogebog, sætKogebogForOpskrift,
 } from '../lib/kogebøger';
 import NavngivModal from './NavngivModal';
 import type { Opskrift } from '../types/opskrift';
@@ -417,7 +417,7 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
                     : kategori === 'mine'
                       ? 'Du har ingen egne opskrifter endnu — tryk "+ Tilføj opskrift" øverst'
                       : kategori === 'kogeboeger'
-                        ? 'Denne kogebog er tom — åbn en opskrift og tryk "Læg i kogebog"'
+                        ? 'Denne kogebog er tom — tryk "+ Tilføj opskrift", eller åbn en opskrift og tryk "Læg i kogebog"'
                         : 'Ingen retter i denne kategori endnu'}
               </Text>
             </View>
@@ -565,7 +565,12 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
           butikker={butikker}
           metode={metode}
           onLuk={() => { setImportÅben(false); setMetode(null); }}
-          onGemt={() => { setImportÅben(false); setMetode(null); setImportNonce(n => n + 1); }}
+          onGemt={async (opskrift) => {
+            setImportÅben(false); setMetode(null);
+            // Står man inde i en kogebog, lægges den nye opskrift dér med det samme
+            if (valgtKogebog) await sætKogebogForOpskrift(opskrift.id, valgtKogebog);
+            setImportNonce(n => n + 1);
+          }}
           onSkrivSelv={() => {
             setImportÅben(false);
             setMetode(null);
@@ -599,7 +604,11 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
           opskrift={redigerOpskrift}
           erNy={erNyOpskrift}
           onLuk={() => { setRedigerOpskrift(null); setErNyOpskrift(false); }}
-          onGemt={() => { setRedigerOpskrift(null); setErNyOpskrift(false); setImportNonce(n => n + 1); }}
+          onGemt={async (opskrift) => {
+            // Kun NYE opskrifter skrevet inde i en kogebog lægges dér (ikke ved redigering)
+            if (erNyOpskrift && valgtKogebog) await sætKogebogForOpskrift(opskrift.id, valgtKogebog);
+            setRedigerOpskrift(null); setErNyOpskrift(false); setImportNonce(n => n + 1);
+          }}
         />
       </SafeAreaView>
     </Modal>

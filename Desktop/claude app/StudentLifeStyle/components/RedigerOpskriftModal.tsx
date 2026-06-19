@@ -20,7 +20,9 @@ type Props = {
   opskrift: Opskrift | null;
   erNy?: boolean;
   onLuk: () => void;
-  onGemt: () => void;
+  // Får den gemte/opdaterede opskrift, så kalderen fx kan lægge en NY opskrift
+  // i en aktiv kogebog. Kaldere der ikke bruger den, kan bare ignorere argumentet.
+  onGemt: (opskrift: Opskrift) => void;
 };
 
 export default function RedigerOpskriftModal({ opskrift, erNy, onLuk, onGemt }: Props) {
@@ -115,7 +117,7 @@ export default function RedigerOpskriftModal({ opskrift, erNy, onLuk, onGemt }: 
       Alert.alert('Fejl', erNy ? 'Kunne ikke gemme opskriften. Er du logget ind?' : 'Kunne ikke gemme ændringerne. Prøv igen.');
       return;
     }
-    onGemt();
+    onGemt(resultat);
   }
 
   return (
