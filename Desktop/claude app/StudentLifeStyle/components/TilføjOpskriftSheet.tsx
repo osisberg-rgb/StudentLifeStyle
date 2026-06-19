@@ -9,7 +9,7 @@ import { GestureHandlerRootView, PanGestureHandler, State } from 'react-native-g
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radii } from '../constants/theme';
 
-export type TilføjMetode = 'kamera' | 'galleri' | 'link' | 'skriv';
+export type TilføjMetode = 'kamera' | 'galleri' | 'link' | 'skriv' | 'kogebog';
 
 type Props = {
   synlig: boolean;
@@ -22,6 +22,7 @@ const VALG: { key: TilføjMetode; ikon: keyof typeof Ionicons.glyphMap; titel: s
   { key: 'kamera',  ikon: 'camera-outline', titel: 'Tag billede',      sub: 'Fotografér opskriften' },
   { key: 'link',    ikon: 'link-outline',   titel: 'Importér fra link', sub: 'Indsæt et opskrifts-link' },
   { key: 'skriv',   ikon: 'create-outline', titel: 'Skriv selv',        sub: 'Indtast den manuelt' },
+  { key: 'kogebog', ikon: 'library-outline', titel: 'Fra kogebog',      sub: 'Flere sidefotos på én gang' },
 ];
 
 export default function TilføjOpskriftSheet({ synlig, onVælg, onLuk }: Props) {

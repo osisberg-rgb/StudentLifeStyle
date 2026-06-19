@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler';
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Alert } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -106,6 +106,12 @@ function MainTabs() {
     setSheetÅben(false);
     if (m === 'skriv') {
       setTimeout(() => { setErNy(true); setRedigerOpskrift(TOM_OPSKRIFT); }, 280);
+      return;
+    }
+    if (m === 'kogebog') {
+      // Foto-bulk bor i ret-vælgeren (Planer). Fra den centrale +-knap sender
+      // vi brugeren ikke videre her — undgå at åbne et halvt flow.
+      setTimeout(() => Alert.alert('Importér fra kogebog', 'Åbn "Vælg retter" på Planer-fanen og tryk + for at importere flere sider fra en kogebog.'), 280);
       return;
     }
     setMetode(m);            // 'kamera' | 'galleri' | 'link'

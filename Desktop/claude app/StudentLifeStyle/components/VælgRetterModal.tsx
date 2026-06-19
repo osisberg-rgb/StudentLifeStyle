@@ -15,6 +15,7 @@ import ImportOpskriftModal from './ImportOpskriftModal';
 import OpskriftDetaljeModal from './OpskriftDetaljeModal';
 import RedigerOpskriftModal from './RedigerOpskriftModal';
 import TilføjOpskriftSheet, { TilføjMetode } from './TilføjOpskriftSheet';
+import ImportKogebogModal from './ImportKogebogModal';
 import { erFavorit } from '../lib/favoritter';
 import {
   kogebøger, opskrifterIKogebog, antalIKogebog,
@@ -66,6 +67,7 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
   const [sheetÅben, setSheetÅben] = useState(false);
   const [metode, setMetode] = useState<'kamera' | 'galleri' | 'link' | null>(null);
   const [importÅben, setImportÅben] = useState(false);
+  const [kogebogImportÅben, setKogebogImportÅben] = useState(false);
   // Opskrift man kigger ind i (ren visning — uden at vælge den)
   const [seOpskrift, setSeOpskrift] = useState<Opskrift | null>(null);
   // Egen opskrift man redigerer i (eller en tom skabelon når man skriver ny ind)
@@ -170,6 +172,10 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
   // som den centrale +-knap i App.tsx)
   function vælgMetode(m: TilføjMetode) {
     setSheetÅben(false);
+    if (m === 'kogebog') {
+      setTimeout(() => setKogebogImportÅben(true), 280);
+      return;
+    }
     if (m === 'skriv') {
       setTimeout(() => {
         setErNyOpskrift(true);
@@ -569,6 +575,12 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
               kategorier: [], ingredienser: [], fremgangsmaade: [], importeret: true,
             });
           }}
+        />
+
+        <ImportKogebogModal
+          synlig={kogebogImportÅben}
+          onLuk={() => setKogebogImportÅben(false)}
+          onFærdig={() => { setKogebogImportÅben(false); setImportNonce(n => n + 1); }}
         />
 
         {/* Ren visning af en opskrift — uden onTilføj vises ingen "tilføj"-knap.
