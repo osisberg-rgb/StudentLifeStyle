@@ -75,7 +75,6 @@ export default function TilføjOpskriftSheet({ synlig, onVælg, onLuk, visKogebo
                       <Ionicons name={v.ikon} size={22} color={Colors.green} />
                     </View>
                     <Text style={styles.kortTitel}>{v.titel}</Text>
-                    <Text style={styles.kortSub}>{v.sub}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -101,12 +100,12 @@ const styles = StyleSheet.create({
     width: '47.5%',
     backgroundColor: Colors.card, borderRadius: Radii.card,
     borderWidth: 1, borderColor: Colors.line,
-    padding: 16, marginBottom: 4,
+    paddingVertical: 16, paddingHorizontal: 12, marginBottom: 4,
+    alignItems: 'center',
   },
   ikonCirkel: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.greenSoft,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+    width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.greenSoft,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 10,
   },
-  kortTitel: { fontSize: 15, fontFamily: 'Inter_700Bold', color: Colors.ink },
-  kortSub: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, marginTop: 2 },
+  kortTitel: { fontSize: 14, fontFamily: 'Inter_700Bold', color: Colors.ink, textAlign: 'center' },
 });
