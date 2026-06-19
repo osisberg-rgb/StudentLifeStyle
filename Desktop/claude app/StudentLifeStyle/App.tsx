@@ -100,9 +100,6 @@ function MainTabs() {
   const [metode, setMetode] = useState<'kamera' | 'galleri' | 'link' | null>(null);
   const [redigerOpskrift, setRedigerOpskrift] = useState<Opskrift | null>(null);
   const [erNy, setErNy] = useState(false);
-  // "Tilføj opskrift"-FAB'en vises kun på de opskrift-relevante faner
-  const [aktivFane, setAktivFane] = useState(harForvalgteRetter() || harLandPåPlaner() ? 'Planer' : 'Hjem');
-  const visFab = aktivFane === 'Hjem' || aktivFane === 'Planer';
 
   // Et kort er valgt i "+"-arket → åbn det rette flow direkte
   function vælgMetode(m: TilføjMetode) {
@@ -126,12 +123,6 @@ function MainTabs() {
         // Efter onboardingen lander man direkte i Planer — enten med vælgeren
         // præ-valgt (forvalgte retter) eller med en færdigbygget 3-dages plan
         initialRouteName={harForvalgteRetter() || harLandPåPlaner() ? 'Planer' : 'Hjem'}
-        screenListeners={{
-          state: (e: any) => {
-            const nav = e.data?.state;
-            if (nav?.routeNames) setAktivFane(nav.routeNames[nav.index]);
-          },
-        }}
         screenOptions={({ route }) => ({
           headerShown: false,
           tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} />,
@@ -163,10 +154,7 @@ function MainTabs() {
           component={TilføjPlaceholder}
           options={{
             tabBarLabel: () => null,
-            // FAB kun på Hjem/Planer; ellers et tomt felt så de 4 faner beholder placering
-            tabBarButton: () => visFab
-              ? <CenterFab onPress={() => setSheetÅben(true)} />
-              : <View style={{ flex: 1 }} />,
+            tabBarButton: () => <CenterFab onPress={() => setSheetÅben(true)} />,
           }}
         />
         <Tab.Screen name="Indkøb" component={IndkøbScreen} />
