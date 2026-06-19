@@ -303,16 +303,16 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
               <Text style={[styles.chipTekst, !kategori && styles.chipTekstAktiv]}>Alle</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.chip, kategori === 'favoritter' && styles.chipAktiv]}
-              onPress={() => vælgKategori(kategori === 'favoritter' ? null : 'favoritter')}
-            >
-              <Text style={[styles.chipTekst, kategori === 'favoritter' && styles.chipTekstAktiv]}>❤️ Favoritter</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
               style={[styles.chip, kategori === 'kogeboeger' && styles.chipAktiv]}
               onPress={vælgKogebøger}
             >
               <Text style={[styles.chipTekst, kategori === 'kogeboeger' && styles.chipTekstAktiv]}>📚 Kogebøger</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.chip, kategori === 'favoritter' && styles.chipAktiv]}
+              onPress={() => vælgKategori(kategori === 'favoritter' ? null : 'favoritter')}
+            >
+              <Text style={[styles.chipTekst, kategori === 'favoritter' && styles.chipTekstAktiv]}>❤️ Favoritter</Text>
             </TouchableOpacity>
             {KATEGORIER.map(k => (
               <TouchableOpacity
