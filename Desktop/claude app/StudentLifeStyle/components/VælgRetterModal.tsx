@@ -418,8 +418,8 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
 
           {/* Grid af opskrifter */}
           <View style={styles.grid}>
-            {/* Indsæt egen opskrift — som et kort i grid'et */}
-            {!dagMode && !(kategori === 'kogeboeger' && !valgtKogebog) && (
+            {/* Indsæt egen opskrift — KUN inde i en kogebog (ikke i de øvrige kategorier) */}
+            {!dagMode && kategori === 'kogeboeger' && !!valgtKogebog && (
               <TouchableOpacity
                 style={styles.importKort}
                 onPress={() => setSheetÅben(true)}
