@@ -16,11 +16,16 @@ import OpskriftDetaljeModal from './OpskriftDetaljeModal';
 import RedigerOpskriftModal from './RedigerOpskriftModal';
 import TilføjOpskriftSheet, { TilføjMetode } from './TilføjOpskriftSheet';
 import { erFavorit } from '../lib/favoritter';
+import {
+  kogebøger, opskrifterIKogebog, antalIKogebog,
+  opretKogebog, omdøbKogebog, sletKogebog,
+} from '../lib/kogebøger';
+import NavngivModal from './NavngivModal';
 import type { Opskrift } from '../types/opskrift';
 
 // Ud over de statiske kategorier kan man filtrere på sine favoritter og
 // sine egne importerede opskrifter
-type Filter = KategoriId | 'favoritter' | 'mine';
+type Filter = KategoriId | 'favoritter' | 'mine' | 'kogeboeger';
 
 const KOED_EMOJI: Record<string, string> = {
   Kylling: '🐔',
@@ -51,6 +56,10 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
   const enkeltValg = !!målDag?.enkeltValg;
   const [valgte, setValgte] = useState<string[]>([]);
   const [kategori, setKategori] = useState<Filter | null>(null);
+  // Drill-in: når en kogebog er åbnet, filtreres grid'et til dens opskrifter.
+  const [valgtKogebog, setValgtKogebog] = useState<string | null>(null);
+  // Opret/omdøb-navngivning (omdøb sætter et id; opret = null-id)
+  const [navngiv, setNavngiv] = useState<{ id: string | null; start: string } | null>(null);
   const [kunHurtige, setKunHurtige] = useState(false);
   const [søg, setSøg] = useState('');
   // "+"-arket (halvskærm, 4 valg) → samme flow som den centrale +-knap
@@ -92,10 +101,12 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
         ? erFavorit(o.id)
         : kategori === 'mine'
           ? !!o.importeret
-          : kategori === 'aftensmad'
-            // Aftensmad = alt der ikke er tagget suppe, salat eller brød
-            ? !(kat?.includes('suppe') || kat?.includes('salat') || kat?.includes('broed') || kat?.includes('dessert'))
-            : kat?.includes(kategori));
+          : kategori === 'kogeboeger'
+            ? (valgtKogebog ? opskrifterIKogebog(valgtKogebog).includes(o.id) : false)
+            : kategori === 'aftensmad'
+              // Aftensmad = alt der ikke er tagget suppe, salat eller brød
+              ? !(kat?.includes('suppe') || kat?.includes('salat') || kat?.includes('broed') || kat?.includes('dessert'))
+              : kat?.includes(kategori));
     const matcherSøg = !søgQ
       || o.navn.toLowerCase().includes(søgQ)
       || (o.ingredienser ?? []).some((i: any) => (i.navn ?? '').toLowerCase().includes(søgQ));
@@ -111,6 +122,48 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
 
   function vælgKategori(id: Filter | null) {
     setKategori(id);
+  }
+
+  // Skift til kogebog-reolen (eller væk fra den). Nulstiller drill-in.
+  function vælgKogebøger() {
+    setValgtKogebog(null);
+    setKategori(kategori === 'kogeboeger' ? null : 'kogeboeger');
+  }
+
+  async function gemNavngivning(navn: string) {
+    const mål = navngiv;
+    setNavngiv(null);
+    if (!mål) return;
+    if (mål.id) {
+      const ok = await omdøbKogebog(mål.id, navn);
+      if (!ok) Alert.alert('Fejl', 'Kunne ikke omdøbe kogebogen.');
+      else setImportNonce(n => n + 1);
+    } else {
+      const k = await opretKogebog(navn);
+      if (!k) Alert.alert('Fejl', 'Kunne ikke oprette kogebogen. Er du logget ind?');
+      else { setImportNonce(n => n + 1); setValgtKogebog(k.id); }
+    }
+  }
+
+  function administrérKogebog(id: string, navn: string) {
+    Alert.alert(navn, undefined, [
+      { text: 'Omdøb', onPress: () => setNavngiv({ id, start: navn }) },
+      {
+        text: 'Slet', style: 'destructive', onPress: () => {
+          Alert.alert('Slet kogebog', `Slet "${navn}"? Opskrifterne slettes ikke — de fjernes bare fra kogebogen.`, [
+            { text: 'Annuller', style: 'cancel' },
+            {
+              text: 'Slet', style: 'destructive', onPress: async () => {
+                const ok = await sletKogebog(id);
+                if (ok) { if (valgtKogebog === id) setValgtKogebog(null); setImportNonce(n => n + 1); }
+                else Alert.alert('Fejl', 'Kunne ikke slette kogebogen.');
+              },
+            },
+          ]);
+        },
+      },
+      { text: 'Annuller', style: 'cancel' },
+    ]);
   }
 
   // Et kort er valgt i "+"-arket → åbn det rette flow direkte (samme routing
@@ -154,6 +207,7 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
     else onVælgEnRet(valgte);                 // 1+ retter → vælg ÉN dag til dem alle
     setValgte([]);
     setKategori(null);
+    setValgtKogebog(null);
     setKunHurtige(false);
     onLuk();
   }
@@ -161,6 +215,7 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
   function håndterAnnuller() {
     setValgte([]);
     setKategori(null);
+    setValgtKogebog(null);
     setKunHurtige(false);
     onLuk();
   }
@@ -282,6 +337,12 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
             >
               <Text style={[styles.chipTekst, kategori === 'mine' && styles.chipTekstAktiv]}>🔗 Dine opskrifter</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.chip, kategori === 'kogeboeger' && styles.chipAktiv]}
+              onPress={vælgKogebøger}
+            >
+              <Text style={[styles.chipTekst, kategori === 'kogeboeger' && styles.chipTekstAktiv]}>📚 Kogebøger</Text>
+            </TouchableOpacity>
             {KATEGORIER.map(k => (
               <TouchableOpacity
                 key={k.id}
@@ -297,8 +358,47 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
         </View>
 
         <ScrollView contentContainerStyle={styles.indhold} showsVerticalScrollIndicator={false}>
+          {/* Kogebog-reol: liste af kogebøger + opret. Drill-in sætter valgtKogebog. */}
+          {kategori === 'kogeboeger' && !valgtKogebog && (
+            <View style={styles.reol}>
+              <TouchableOpacity style={styles.nyKogebogKort} onPress={() => setNavngiv({ id: null, start: '' })}>
+                <Text style={styles.nyKogebogPlus}>＋</Text>
+                <Text style={styles.nyKogebogTekst}>Ny kogebog</Text>
+              </TouchableOpacity>
+              {kogebøger().length === 0 ? (
+                <Text style={styles.reolTom}>Ingen kogebøger endnu. Opret en, eller åbn en opskrift og tryk "Læg i kogebog".</Text>
+              ) : (
+                kogebøger().map(k => (
+                  <TouchableOpacity
+                    key={k.id}
+                    style={styles.kogebogKort}
+                    onPress={() => setValgtKogebog(k.id)}
+                    onLongPress={() => administrérKogebog(k.id, k.navn)}
+                  >
+                    <Text style={styles.kogebogKortEmoji}>{k.emoji}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.kogebogKortNavn}>{k.navn}</Text>
+                      <Text style={styles.kogebogKortAntal}>{antalIKogebog(k.id)} opskrifter</Text>
+                    </View>
+                    <Text style={styles.kogebogKortPil}>›</Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+          )}
+
+          {/* Drill-in-header: tilbage til reolen */}
+          {kategori === 'kogeboeger' && valgtKogebog && (
+            <TouchableOpacity style={styles.drillHeader} onPress={() => setValgtKogebog(null)}>
+              <Text style={styles.drillTilbage}>‹ Alle kogebøger</Text>
+              <Text style={styles.drillNavn} numberOfLines={1}>
+                {kogebøger().find(k => k.id === valgtKogebog)?.navn ?? ''}
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {/* Tom kategori */}
-          {viste.length === 0 && (
+          {viste.length === 0 && !(kategori === 'kogeboeger' && !valgtKogebog) && (
             <View style={styles.tomKategori}>
               <Text style={styles.tomKategoriEmoji}>
                 {kategori === 'favoritter' ? '🤍' : kategori === 'mine' ? '🔗' : '🔍'}
@@ -310,7 +410,9 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
                     ? 'Ingen favoritter endnu — åbn en opskrift og tryk på hjertet ❤️'
                     : kategori === 'mine'
                       ? 'Du har ingen egne opskrifter endnu — tryk "+ Tilføj opskrift" øverst'
-                      : 'Ingen retter i denne kategori endnu'}
+                      : kategori === 'kogeboeger'
+                        ? 'Denne kogebog er tom — åbn en opskrift og tryk "Læg i kogebog"'
+                        : 'Ingen retter i denne kategori endnu'}
               </Text>
             </View>
           )}
@@ -318,7 +420,7 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
           {/* Grid af opskrifter */}
           <View style={styles.grid}>
             {/* Indsæt egen opskrift — som et kort i grid'et */}
-            {!dagMode && (
+            {!dagMode && !(kategori === 'kogeboeger' && !valgtKogebog) && (
               <TouchableOpacity
                 style={styles.importKort}
                 onPress={() => setSheetÅben(true)}
@@ -434,6 +536,16 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
             </Text>
           </TouchableOpacity>
         </View>
+
+        <NavngivModal
+          synlig={!!navngiv}
+          titel={navngiv?.id ? 'Omdøb kogebog' : 'Ny kogebog'}
+          startVærdi={navngiv?.start ?? ''}
+          placeholder="Fx Min mors kogebog"
+          gemTekst={navngiv?.id ? 'Gem' : 'Opret'}
+          onGem={gemNavngivning}
+          onLuk={() => setNavngiv(null)}
+        />
 
         {/* Halvskærms-ark — vælg HVORDAN (foto/screenshot/link/skriv selv) */}
         <TilføjOpskriftSheet
@@ -640,4 +752,26 @@ const styles = StyleSheet.create({
   },
   genererKnapDisabled: { backgroundColor: Colors.line },
   genererKnapTekst: { color: '#fff', fontSize: 15, fontFamily: 'Inter_700Bold' },
+
+  reol: { gap: 10 },
+  nyKogebogKort: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: Colors.card, borderRadius: Radii.card,
+    borderWidth: 1, borderColor: Colors.green, borderStyle: 'dashed', padding: 16,
+  },
+  nyKogebogPlus: { fontSize: 20, color: Colors.green, fontFamily: 'Inter_700Bold' },
+  nyKogebogTekst: { fontSize: 15, fontFamily: 'Inter_700Bold', color: Colors.green },
+  kogebogKort: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: Colors.card, borderRadius: Radii.card,
+    borderWidth: 1, borderColor: Colors.line, padding: 16,
+  },
+  kogebogKortEmoji: { fontSize: 24 },
+  kogebogKortNavn: { fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.ink },
+  kogebogKortAntal: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, marginTop: 2 },
+  kogebogKortPil: { fontSize: 22, color: Colors.inkSoft, fontFamily: 'Inter_400Regular' },
+  reolTom: { fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, textAlign: 'center', padding: 24, lineHeight: 20 },
+  drillHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  drillTilbage: { fontSize: 14, fontFamily: 'Inter_700Bold', color: Colors.green },
+  drillNavn: { flex: 1, fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.inkSoft },
 });
