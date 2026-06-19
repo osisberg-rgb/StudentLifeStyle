@@ -373,7 +373,13 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
                       <Text style={styles.kogebogKortNavn}>{k.navn}</Text>
                       <Text style={styles.kogebogKortAntal}>{antalIKogebog(k.id)} opskrifter</Text>
                     </View>
-                    <Text style={styles.kogebogKortPil}>›</Text>
+                    <TouchableOpacity
+                      onPress={() => administrérKogebog(k.id, k.navn)}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      style={styles.kogebogMenuKnap}
+                    >
+                      <Text style={styles.kogebogMenuPrik}>⋯</Text>
+                    </TouchableOpacity>
                   </TouchableOpacity>
                 ))
               )}
@@ -757,6 +763,8 @@ const styles = StyleSheet.create({
   kogebogKortNavn: { fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.ink },
   kogebogKortAntal: { fontSize: 12, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, marginTop: 2 },
   kogebogKortPil: { fontSize: 22, color: Colors.inkSoft, fontFamily: 'Inter_400Regular' },
+  kogebogMenuKnap: { paddingHorizontal: 6, paddingVertical: 2 },
+  kogebogMenuPrik: { fontSize: 22, color: Colors.inkSoft, fontFamily: 'Inter_700Bold', lineHeight: 22 },
   reolTom: { fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, textAlign: 'center', padding: 24, lineHeight: 20 },
   drillHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
   drillTilbage: { fontSize: 14, fontFamily: 'Inter_700Bold', color: Colors.green },
