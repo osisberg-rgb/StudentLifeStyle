@@ -265,7 +265,7 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
           <TouchableOpacity onPress={håndterAnnuller}>
             <Text style={styles.annuller}>Annuller</Text>
           </TouchableOpacity>
-          <Text style={styles.titel}>{dagMode ? 'Vælg ret' : 'Vælg retter'}</Text>
+          <Text style={styles.titel}>{dagMode ? 'Vælg opskrift' : 'Vælg Opskrifter'}</Text>
           <Text style={styles.tæller} numberOfLines={1}>
             {dagMode ? `Til ${målDag!.dagNavn}` : ''}
           </Text>
