@@ -35,18 +35,10 @@ create policy "Admin opdaterer egne jobs" on public.tilbud_import_job
 create index if not exists tilbud_import_job_uge_idx
   on public.tilbud_import_job (uge);
 
--- Storage: kun admin må skrive til tilbudsaviser/inbox/. (Cloud-scriptet bruger
--- service-role og omgår RLS; disse policies gælder kun in-app upload.)
--- Gater på auth.uid() (admin-bruger-id) — IKKE email-claim, jf. ovenfor.
-create policy "Admin upload inbox" on storage.objects
-  for insert to authenticated with check (
-    bucket_id = 'tilbudsaviser'
-    and auth.uid() = 'a896ec72-1d5d-4f10-b221-5cd9bcb511a6'::uuid
-    and name like 'inbox/%'
-  );
-create policy "Admin opdater inbox" on storage.objects
-  for update to authenticated using (
-    bucket_id = 'tilbudsaviser'
-    and auth.uid() = 'a896ec72-1d5d-4f10-b221-5cd9bcb511a6'::uuid
-    and name like 'inbox/%'
-  );
+-- Storage-upload til tilbudsaviser/inbox/ sker via SIGNEREDE upload-URL'er, IKKE
+-- via RLS. Årsag: Storage-tjenesten genkender ikke brugerens JWT som
+-- authenticated (auth.uid()/auth.role() er tomme i Storage-RLS her), så enhver
+-- RLS-baseret in-app upload afvises. Edge-funktionen `tilbud-upload-url`
+-- (admin-gated via getUser) laver i stedet en signeret upload-URL med
+-- service-role, og appen PUT'er filen dertil — signeringen bypasser RLS.
+-- Derfor oprettes BEVIDST ingen insert/update-policy på storage.objects her.

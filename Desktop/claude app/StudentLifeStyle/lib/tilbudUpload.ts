@@ -2,7 +2,7 @@
 // `tilbud_import_job`-rækker, og kald edge-funktionen start-tilbud-import der
 // affyrer GitHub Action'en. hentJobStatus() bruges til at polle fremdrift.
 import * as FileSystem from 'expo-file-system/legacy';
-import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
+import { supabase } from './supabase';
 
 export type ButikValg = 'Netto' | 'Rema 1000' | 'Føtex' | 'SuperBrugsen' | 'Bilka';
 
@@ -45,39 +45,44 @@ export async function uploadOgStart(filer: UploadFil[], uge: number): Promise<{ 
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) return { ok: false, fejl: 'Du er ikke logget ind' };
   const user = session.user;
+  const slugs = filer.map(f => BUTIK_SLUG[f.butik]);
+
+  // 1) Hent signerede upload-URL'er fra den admin-gatede edge-fn. Vi kan ikke
+  // uploade direkte: Storage genkender ikke brugerens JWT som authenticated, så
+  // RLS afviser. Edge-fn'en laver en signeret URL med service-role (bypasser RLS).
+  const { data: urlData, error: urlErr } =
+    await supabase.functions.invoke('tilbud-upload-url', { body: { uge, slugs } });
+  const urlListe: { slug: string; signedUrl: string }[] = urlData?.urls ?? [];
+  if (urlErr || urlListe.length === 0) {
+    return { ok: false, fejl: `Kunne ikke hente upload-URL: ${urlErr?.message ?? 'ukendt fejl'}` };
+  }
+  const urlForSlug = new Map(urlListe.map(u => [u.slug, u.signedUrl]));
 
   const jobs: { slug: string; butik: string; sti: string }[] = [];
   for (const f of filer) {
     const slug = BUTIK_SLUG[f.butik];
-    const sti = `inbox/${slug}-uge${uge}.pdf`;
+    const signedUrl = urlForSlug.get(slug);
+    if (!signedUrl) return { ok: false, fejl: `Mangler upload-URL (${f.butik})` };
 
-    // Stream filen direkte fra disk til Storage (IKKE arrayBuffer — store PDF'er
-    // sprænger ellers JS-heapen og giver OutOfMemoryError i Expo Go).
-    const res = await FileSystem.uploadAsync(
-      `${supabaseUrl}/storage/v1/object/tilbudsaviser/${sti}`,
-      f.uri,
-      {
-        httpMethod: 'POST',
-        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          apikey: supabaseAnonKey,
-          'x-upsert': 'true',
-          'content-type': 'application/pdf',
-        },
-      },
-    );
+    // 2) PUT filen til den signerede URL — streamet fra disk (ingen OOM), ingen RLS.
+    const res = await FileSystem.uploadAsync(signedUrl, f.uri, {
+      httpMethod: 'PUT',
+      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+      headers: { 'content-type': 'application/pdf', 'x-upsert': 'true' },
+    });
     if (res.status !== 200) return { ok: false, fejl: `Upload fejlede (${f.butik}): HTTP ${res.status}` };
 
+    // 3) Opret job-række (PostgREST genkender brugeren korrekt).
     const ins = await supabase.from('tilbud_import_job').upsert({
       id: `${slug}-uge${uge}`, user_id: user.id, butik: f.butik, slug, uge,
       status: 'afventer', antal: 0, fejl: null,
     }, { onConflict: 'id' });
     if (ins.error) return { ok: false, fejl: `Kunne ikke oprette job (${f.butik}): ${ins.error.message}` };
 
-    jobs.push({ slug, butik: f.butik, sti });
+    jobs.push({ slug, butik: f.butik, sti: `inbox/${slug}-uge${uge}.pdf` });
   }
 
+  // 4) Start sky-importen.
   const { error } = await supabase.functions.invoke('start-tilbud-import', { body: { uge, jobs } });
   if (error) return { ok: false, fejl: `Kunne ikke starte sky-import: ${error.message}` };
   return { ok: true };
