@@ -1,7 +1,8 @@
 // Admin-upload af tilbudsaviser: upload PDF'er til Storage `inbox/`, opret
 // `tilbud_import_job`-rækker, og kald edge-funktionen start-tilbud-import der
 // affyrer GitHub Action'en. hentJobStatus() bruges til at polle fremdrift.
-import { supabase } from './supabase';
+import * as FileSystem from 'expo-file-system/legacy';
+import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 
 export type ButikValg = 'Netto' | 'Rema 1000' | 'Føtex' | 'SuperBrugsen' | 'Bilka';
 
@@ -41,19 +42,32 @@ export function gætButik(filnavn: string): ButikValg {
 
 // Upload hver PDF til inbox, opret job-rækker, og start sky-importen.
 export async function uploadOgStart(filer: UploadFil[], uge: number): Promise<{ ok: boolean; fejl?: string }> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, fejl: 'Du er ikke logget ind' };
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) return { ok: false, fejl: 'Du er ikke logget ind' };
+  const user = session.user;
 
   const jobs: { slug: string; butik: string; sti: string }[] = [];
   for (const f of filer) {
     const slug = BUTIK_SLUG[f.butik];
     const sti = `inbox/${slug}-uge${uge}.pdf`;
 
-    // Læs den lokale fil som ArrayBuffer (undgår RN's tomme-Blob-problem).
-    const arrayBuffer = await (await fetch(f.uri)).arrayBuffer();
-    const up = await supabase.storage.from('tilbudsaviser')
-      .upload(sti, arrayBuffer, { contentType: 'application/pdf', upsert: true });
-    if (up.error) return { ok: false, fejl: `Upload fejlede (${f.butik}): ${up.error.message}` };
+    // Stream filen direkte fra disk til Storage (IKKE arrayBuffer — store PDF'er
+    // sprænger ellers JS-heapen og giver OutOfMemoryError i Expo Go).
+    const res = await FileSystem.uploadAsync(
+      `${supabaseUrl}/storage/v1/object/tilbudsaviser/${sti}`,
+      f.uri,
+      {
+        httpMethod: 'POST',
+        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: supabaseAnonKey,
+          'x-upsert': 'true',
+          'content-type': 'application/pdf',
+        },
+      },
+    );
+    if (res.status !== 200) return { ok: false, fejl: `Upload fejlede (${f.butik}): HTTP ${res.status}` };
 
     const ins = await supabase.from('tilbud_import_job').upsert({
       id: `${slug}-uge${uge}`, user_id: user.id, butik: f.butik, slug, uge,
