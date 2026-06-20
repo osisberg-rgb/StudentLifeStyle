@@ -15,16 +15,19 @@ import {
   hentWatchlist, alleWatch, tilføjWatch, fjernWatch, termFraFritekst, type WatchRække,
 } from '../lib/watchlist';
 import { harTilladelse, registrérForPush, afmeldPush } from '../lib/notifikationer';
+import { erAdmin } from '../lib/admin';
+import UploadTilbudModal from '../components/UploadTilbudModal';
 
 const ALLE_BUTIKKER = ['Netto', 'Rema 1000', 'Føtex', 'SuperBrugsen', 'Bilka'];
 
 export default function ProfilScreen() {
-  const { user, signOut } = useAuth();
+  const { user, session, signOut } = useAuth();
   const [valgteButikker, setValgteButikker] = useState(['Netto', 'Rema 1000']);
   const [butikModalVisible, setButikModalVisible] = useState(false);
   const [personer, setPersoner] = useState(4);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [historikÅben, setHistorikÅben] = useState(false);
+  const [uploadÅben, setUploadÅben] = useState(false);
   const [watch, setWatch] = useState<WatchRække[]>([]);
   const [nyVare, setNyVare] = useState('');
   const [notiTil, setNotiTil] = useState(false);
@@ -217,6 +220,20 @@ export default function ProfilScreen() {
           ))}
         </View>
 
+        {/* Admin — kun synlig for admin-konti (gaten håndhæves server-side) */}
+        {erAdmin(session) && (
+          <>
+            <Text style={styles.sektionLabel}>ADMIN</Text>
+            <View style={styles.kort}>
+              <TouchableOpacity style={styles.række} onPress={() => setUploadÅben(true)}>
+                <Text style={styles.rækkIkon}>🗞️</Text>
+                <Text style={styles.rækkeLabel}>Upload tilbudsavis</Text>
+                <Text style={styles.værditekst}>›</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+
         {/* Andet */}
         <Text style={styles.sektionLabel}>ANDET</Text>
         <View style={styles.kort}>
@@ -281,6 +298,7 @@ export default function ProfilScreen() {
         uger={uger}
         onLuk={() => setHistorikÅben(false)}
       />
+      <UploadTilbudModal synlig={uploadÅben} onLuk={() => setUploadÅben(false)} />
     </SafeAreaView>
   );
 }
