@@ -16,7 +16,7 @@ import {
 type Props = { synlig: boolean; onLuk: () => void };
 
 const STATUS_TEKST: Record<JobStatus['status'], string> = {
-  afventer: 'Afventer …', kører: 'Udtrækker …', færdig: 'Færdig', fejl: 'Fejl',
+  afventer: 'Afventer …', koerer: 'Udtrækker …', faerdig: 'Færdig', fejl: 'Fejl',
 };
 
 export default function UploadTilbudModal({ synlig, onLuk }: Props) {
@@ -54,7 +54,7 @@ export default function UploadTilbudModal({ synlig, onLuk }: Props) {
     pollRef.current = setInterval(async () => {
       const s = await hentJobStatus(ugeNr, slugs);
       setJobs(s);
-      const alleFærdige = s.length > 0 && s.every(j => j.status === 'færdig' || j.status === 'fejl');
+      const alleFærdige = s.length > 0 && s.every(j => j.status === 'faerdig' || j.status === 'fejl');
       if (alleFærdige && pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; setSender(false); }
     }, 4000);
   }
@@ -115,8 +115,8 @@ export default function UploadTilbudModal({ synlig, onLuk }: Props) {
               {jobs.map(j => (
                 <View key={j.id} style={styles.statusRække}>
                   <Text style={styles.statusButik}>{j.slug}</Text>
-                  <Text style={[styles.statusVærdi, j.status === 'fejl' && { color: Colors.red }, j.status === 'færdig' && { color: Colors.green }]}>
-                    {STATUS_TEKST[j.status]}{j.status === 'færdig' ? ` — ${j.antal} tilbud` : ''}
+                  <Text style={[styles.statusVærdi, j.status === 'fejl' && { color: Colors.red }, j.status === 'faerdig' && { color: Colors.green }]}>
+                    {STATUS_TEKST[j.status]}{j.status === 'faerdig' ? ` — ${j.antal} tilbud` : ''}
                   </Text>
                 </View>
               ))}

@@ -20,7 +20,7 @@ export type UploadFil = { uri: string; navn: string; butik: ButikValg };
 
 export type JobStatus = {
   id: string; butik: string; slug: string; uge: number;
-  status: 'afventer' | 'kører' | 'færdig' | 'fejl'; antal: number; fejl: string | null;
+  status: 'afventer' | 'koerer' | 'faerdig' | 'fejl'; antal: number; fejl: string | null;
 };
 
 // Samme uge-formel som appens getWeekNumber() (IKKE ISO).

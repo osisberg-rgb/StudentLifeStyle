@@ -28,7 +28,7 @@ $bytes = New-Object byte[] $cred.CredentialBlobSize
 $token = ([System.Text.Encoding]::Unicode.GetString($bytes)).Trim([char]0)
 if ($token -notmatch '^sbp_') { $token = ([System.Text.Encoding]::UTF8.GetString($bytes)).Trim([char]0) }
 
-if ($File)      { $sql = Get-Content -Raw $File }
+if ($File)      { $sql = Get-Content -Raw -Encoding UTF8 $File }
 elseif ($Query) { $sql = $Query }
 else            { throw "Angiv -File eller -Query" }
 

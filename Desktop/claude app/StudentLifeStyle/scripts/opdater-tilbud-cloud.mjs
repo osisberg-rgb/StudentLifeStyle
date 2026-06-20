@@ -44,11 +44,11 @@ for (const job of JOBS) {
   const sti = job.sti || `inbox/${slug}-uge${UGE}.pdf`;
   console.log(`\n=== ${butik} (uge ${UGE}) ===`);
   try {
-    await sætStatus(slug, { status: 'kører', fejl: null });
+    await sætStatus(slug, { status: 'koerer', fejl: null });
     const pdfBuffer = await hentPdf(sti);
     const { antal } = await behandlButik({ slug, butik, uge: UGE, pdfBuffer, log: console.log });
     await sletInbox(sti);
-    await sætStatus(slug, { status: 'færdig', antal });
+    await sætStatus(slug, { status: 'faerdig', antal });
     console.log(`  ✓ ${antal} tilbud gemt for ${butik}`);
   } catch (e) {
     await sætStatus(slug, { status: 'fejl', fejl: String(e?.message ?? e) });

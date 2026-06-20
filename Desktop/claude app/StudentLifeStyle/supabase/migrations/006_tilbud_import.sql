@@ -10,7 +10,7 @@ create table if not exists public.tilbud_import_job (
   slug text not null,
   uge int not null,
   status text not null default 'afventer'
-    check (status in ('afventer', 'kører', 'færdig', 'fejl')),
+    check (status in ('afventer', 'koerer', 'faerdig', 'fejl')),
   antal int not null default 0,
   fejl text,
   created_at timestamptz not null default now(),
