@@ -19,11 +19,13 @@ create table if not exists public.tilbud_import_job (
 
 alter table public.tilbud_import_job enable row level security;
 
--- Kun admin-e-mails må oprette jobs; brugeren kan kun se/ændre egne rækker.
+-- Kun admin må oprette jobs; brugeren kan kun se/ændre egne rækker.
+-- NB: vi gater på auth.uid() (admin-bruger-id), IKKE auth.jwt()->>'email' —
+-- email-claimet er ikke pålideligt til stede i RLS-tokenet (gav RLS-fejl).
 create policy "Admin opretter jobs" on public.tilbud_import_job
   for insert with check (
     auth.uid() = user_id
-    and lower(auth.jwt() ->> 'email') = any (array['os.isberg@gmail.com'])
+    and auth.uid() = 'a896ec72-1d5d-4f10-b221-5cd9bcb511a6'::uuid
   );
 create policy "Admin ser egne jobs" on public.tilbud_import_job
   for select using (auth.uid() = user_id);
@@ -35,15 +37,16 @@ create index if not exists tilbud_import_job_uge_idx
 
 -- Storage: kun admin må skrive til tilbudsaviser/inbox/. (Cloud-scriptet bruger
 -- service-role og omgår RLS; disse policies gælder kun in-app upload.)
+-- Gater på auth.uid() (admin-bruger-id) — IKKE email-claim, jf. ovenfor.
 create policy "Admin upload inbox" on storage.objects
   for insert to authenticated with check (
     bucket_id = 'tilbudsaviser'
-    and lower(auth.jwt() ->> 'email') = any (array['os.isberg@gmail.com'])
+    and auth.uid() = 'a896ec72-1d5d-4f10-b221-5cd9bcb511a6'::uuid
     and name like 'inbox/%'
   );
 create policy "Admin opdater inbox" on storage.objects
   for update to authenticated using (
     bucket_id = 'tilbudsaviser'
-    and lower(auth.jwt() ->> 'email') = any (array['os.isberg@gmail.com'])
+    and auth.uid() = 'a896ec72-1d5d-4f10-b221-5cd9bcb511a6'::uuid
     and name like 'inbox/%'
   );
