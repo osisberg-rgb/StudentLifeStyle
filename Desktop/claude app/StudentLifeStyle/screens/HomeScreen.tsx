@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Ingrediens, Madplan } from '../types/madplan';
 import { bedsteTilbud, aktiveTilbud, tilbudTilDig } from '../constants/tilbudspriser';
+import { synkroniserTilbud } from '../lib/tilbudSync';
 import { termerFor } from '../constants/mineVarer';
 import { hentMineVarer } from '../lib/mineVarer';
 import MineVarerModal from '../components/MineVarerModal';
@@ -36,9 +37,9 @@ const UGEDAGE = ['Søndag', 'Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 
 // Opdater PDF'erne hver uge ved at uploade nye filer med samme navn (upsert).
 const AVIS_BASE = 'https://oqolcifpmdybimspnadc.supabase.co/storage/v1/object/public/tilbudsaviser';
 const AVISER = [
-  { butik: 'Netto', url: `${AVIS_BASE}/netto-uge25.pdf`, cover: `${AVIS_BASE}/netto-cover.png` },
-  { butik: 'Rema 1000', url: `${AVIS_BASE}/rema1000-uge25.pdf`, cover: `${AVIS_BASE}/rema1000-cover.png` },
-  { butik: 'Føtex', url: `${AVIS_BASE}/fotex-uge25.pdf`, cover: `${AVIS_BASE}/fotex-cover.png` },
+  { butik: 'Netto', slug: 'netto' },
+  { butik: 'Rema 1000', slug: 'rema1000' },
+  { butik: 'Føtex', slug: 'fotex' },
 ];
 
 type Props = { navigation: any };
@@ -58,6 +59,8 @@ export default function HomeScreen({ navigation }: Props) {
   const [gemmerDetalje, setGemmerDetalje] = useState(false);
   // Tilbud lagt på indkøbslisten (nøgle: butik|navn) → viser ✓ på kortet
   const [tilføjedeTilbud, setTilføjedeTilbud] = useState<Set<string>>(new Set());
+  // Bumpes når en frisk tilbuds-synk har hentet nye rækker → tving memo-recompute
+  const [tilbudNonce, setTilbudNonce] = useState(0);
 
   const firstName = navn ?? user?.email?.split('@')[0] ?? 'dig';
   const weekNo = getWeekNumber();
@@ -82,9 +85,11 @@ export default function HomeScreen({ navigation }: Props) {
   }, [madplan, favoritterVersion()]);
   const ugensTilbud = useMemo(
     () => tilbudTilDig(termerFor(mineLabels), relevanteOrd, 4, butikker),
-    [mineLabels, relevanteOrd, butikker, weekNo],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mineLabels, relevanteOrd, butikker, weekNo, tilbudNonce],
   );
-  const harTilbudsdata = useMemo(() => aktiveTilbud().length > 0, [weekNo]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const harTilbudsdata = useMemo(() => aktiveTilbud().length > 0, [weekNo, tilbudNonce]);
 
   // Familiens vigtigste spørgsmål kl. 17: hvad skal vi have i aften?
   const dagIndex = idag === 0 ? 6 : idag - 1;
@@ -296,6 +301,9 @@ export default function HomeScreen({ navigation }: Props) {
       });
       // Hent overvågede varer ind i storen, så 🔔-knapperne viser korrekt tilstand
       hentWatchlist();
+      // Frisk tilbuds-synk (tving forbi 5-min-spærren) så netop-uploadede tilbud
+      // vises uden at appen skal genstartes. Bump nonce → memo'erne genberegnes.
+      synkroniserTilbud(true).then(opdateret => { if (opdateret) setTilbudNonce(n => n + 1); });
     }, [])
   );
 
@@ -495,14 +503,16 @@ export default function HomeScreen({ navigation }: Props) {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.aviserStribe}>
             {AVISER.map(a => {
               const farver = StoreColors[a.butik] ?? { bg: Colors.green, text: '#fff' };
+              const url = `${AVIS_BASE}/${a.slug}-uge${weekNo}.pdf`;
+              const cover = `${AVIS_BASE}/${a.slug}-cover.png`;
               return (
                 <TouchableOpacity
                   key={a.butik}
                   style={styles.avisKort}
-                  onPress={() => WebBrowser.openBrowserAsync(a.url)}
+                  onPress={() => WebBrowser.openBrowserAsync(url)}
                   activeOpacity={0.85}
                 >
-                  <ImageBackground source={{ uri: a.cover }} style={styles.avisCover} imageStyle={styles.avisCoverImg}>
+                  <ImageBackground source={{ uri: cover }} style={styles.avisCover} imageStyle={styles.avisCoverImg}>
                     <View style={[styles.avisLabel, { backgroundColor: farver.bg }]}>
                       <Text style={[styles.avisNavn, { color: farver.text }]}>{a.butik}</Text>
                     </View>
