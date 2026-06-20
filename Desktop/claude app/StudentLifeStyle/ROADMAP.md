@@ -53,8 +53,13 @@ kostpræferencer er **udfaset**, og "sparet pr. uge"-tal er droppet — værdien
 - **Fase 1 ✓ (bygget + røg-testet):** edge-funktion `importer-tilbud` (GPT-vision pr.
   avis-side) + lokalt **`scripts/opdater-tilbud.ps1`** der i ét hug uploader PDF+cover
   og udtrækker tilbud til `tilbud`-tabellen. Ugentligt: `pwsh scripts/opdater-tilbud.ps1`.
-- **Rest:** bedre soeg-tagging (prompt-tuning) eller et review-trin; ingen butiks-API
-  tilgængeligt, så Fase 2 (cron mod API) er udskudt. Lancerings-playbook: `LANCERING.md`.
+- **Fase 2 ✓ (sky-pipeline, 20. jun):** udtrækningen kører nu **i skyen**, ikke på PC'en.
+  Admin uploader PDF'erne i appen (Profil → Upload tilbudsavis) → Storage `inbox/` +
+  `tilbud_import_job` → edge-fn `start-tilbud-import` affyrer en GitHub `repository_dispatch`
+  → Action'en kører det delte udtræk (`scripts/tilbud-core.mjs`) og skriver `tilbud`.
+  Status pr. butik vises i appen; appen læser live. Spec/plan i `docs/superpowers/`.
+- **Rest:** bedre soeg-tagging (prompt-tuning) eller et review-trin. Intet butiks-API
+  brugt (bevidst — admin finder selv PDF'erne). Lancerings-playbook: `LANCERING.md`.
 
 > De gamle milepæle nedenfor afspejler studie-app-fasen og er delvist overhalet af
 > ovenstående — backloggen i `OPTIMERING.md` er den aktive liste fremad.
@@ -297,4 +302,5 @@ Tallet flyttes af brugerantal og fastholdelse — ikke af prisen.
 | 18. jun 2026 | **Pris-motor hærdet:** tag-audit (special-/pr-enhed-varer der underbød rettet), `matcherSoegeord` strammet (≤3-tegns ord = hele ord, stopper mel→melon), `erPrEnhed` udelukker pr-100g/stk fra prissætning. Regressions-test `scripts/test-matchning.mjs` (kan køre — ingen RN-import). |
 | 18. jun 2026 | **Tilbudsaviser hostet** i Supabase Storage (PDF+cover), åbnes in-app (`expo-web-browser`). Central + i tab-bar → halvskærms-ark (foto/screenshot/link/skriv selv) der går direkte ind i metoden. Favoritter på forsiden kan lægges på madplan / indkøbsliste. Opskrifter: import (link/foto/screenshot), skriv selv, rediger egne, Desserter-kategori, søgning. |
 | 14. jun 2026 | **Indkøbslisten er nu manuel, ikke automatisk.** `byggUgeplan` lægger ikke længere alle planens varer i listen ved generering — den starter TOM (indkoebsliste: [], pris/besparelse 0). Varer tilføjes kun når brugeren åbner en opskrift (dag-kort → OpskriftModal, eller opskrift-detalje) og trykker "Tilføj til indkøbsliste", eller via tilbuds-browseren/+ arket. Byt-en-ret rører heller ikke listen mere (kun planen/dagene ændres). Begrundelse: listen skal afspejle hvad familien faktisk vil købe — ikke hele ugeplanen. "Tilbud brugt"-tællingen (fra plan.indkoebsliste-JSON) vokser i takt med at man tilføjer. Forsidens uge-kort viser en hjælpetekst når listen er tom. |
+| 20. jun 2026 | **Tilbuds-pipeline flyttet til skyen (Fase 2):** in-app admin-upload (Profil → Upload tilbudsavis) lægger PDF'er i Storage `inbox/` + opretter `tilbud_import_job`-rækker; edge-fn `start-tilbud-import` (admin-JWT-gate) affyrer en GitHub `repository_dispatch`; Action'en kører det delte udtræk (`scripts/tilbud-core.mjs`, genbrugt af både lokalt og cloud-script) og skriver `tilbud`. Status pr. butik poller `tilbud_import_job`. Valgt GitHub Actions frem for Deno-edge-rendering (rendering-risiko) og OpenAI PDF-input (ændrer den velafprøvede side-for-side-metode). Intet butiks-API — admin finder selv PDF'erne. Migration `006_tilbud_import.sql`. Spec/plan i `docs/superpowers/`. |
 | 19. jun 2026 | **Kogebøger (samlinger + foto-bulk):** brugeren samler opskrifter — egne OG indbyggede — i navngivne kogebøger (én pr. opskrift). Datamodel: `kogeboeger` + `kogebog_medlemskab` (per bruger, RLS; `opskrift_id` tekst dækker begge slags; primærnøgle (user_id,opskrift_id) håndhæver én-pr-opskrift), klient-store `lib/kogebøger.ts` a la favoritter. Browsing: "📚 Kogebøger"-reol + drill-in i ret-vælgeren; "Læg i kogebog" i opskrift-detaljen. Foto-bulk: nyt ark-valg → `ImportKogebogModal` kører flere sidefotos sekventielt gennem den eksisterende `importer-opskrift` (ét billede = én opskrift, maks 10) → batch-review → gem alle i kogebogen. Klient-side løkke (ikke ny edge-funktion) — undgår tidsgrænse. Hjemmeside-crawl bevidst udskudt. Spec/plan i `docs/superpowers/`. |
