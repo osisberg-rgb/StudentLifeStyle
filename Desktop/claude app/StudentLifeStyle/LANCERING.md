@@ -1,4 +1,4 @@
-# Lancering & go-to-market — Mæt
+# Lancering & go-to-market — Mit Køkken
 
 Levende dokument: hvad vi gør, når appen er færdig — test, App Store/Google Play,
 processen og marketing. Niche: **danske familier / 30+ der gemmer opskrifter og
@@ -21,7 +21,7 @@ vil spare på aftensmaden med ugens tilbud**. Stack: Expo (SDK 54) + Supabase.
 ## 2. Konti & juridisk (forberedelse)
 - [ ] **Apple Developer Program** — 99 USD/år (kræves for App Store + TestFlight).
 - [ ] **Google Play Console** — 25 USD engangsbeløb.
-- [ ] **App-identitet:** endeligt navn (Mæt), bundle id (fx `dk.maet.app`), ikon, splash.
+- [ ] **App-identitet:** endeligt navn (Mit Køkken), bundle id (fx `dk.maet.app`), ikon, splash.
 - [ ] **Privatlivspolitik + vilkår** (GDPR! I gemmer login, husstand, favoritter, watch_items i Supabase). Skal være offentligt URL — link i app + store.
 - [ ] **Datasikkerheds-erklæring:** Apple "App Privacy" + Google "Data safety" — deklarér hvad I indsamler (email, brugsdata). Vær præcis.
 - [ ] **Konto-sletning:** Apple kræver "slet din konto"-funktion i appen hvis man kan oprette konto. Skal bygges (sletter Supabase-bruger + data).

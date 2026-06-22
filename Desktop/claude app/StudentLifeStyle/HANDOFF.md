@@ -1,4 +1,4 @@
-# HANDOFF — Mæt (fortsæt herfra på den nye Mac)
+# HANDOFF — Mit Køkken (fortsæt herfra på den nye Mac)
 
 > Skrevet 18. juni 2026. Formål: gøre det nemt at fortsætte udviklingen fra en ny
 > computer (MacBook). Læs denne fil først, derefter `README.md` (arkitektur/niche),
@@ -9,7 +9,7 @@
 
 ## TL;DR — hvor er vi
 
-**Mæt** er en dansk madplanlægger (React Native + Expo SDK 54 + Supabase) for
+**Mit Køkken** er en dansk madplanlægger (React Native + Expo SDK 54 + Supabase) for
 **familier/30+ der gemmer opskrifter** og vil spare med ugens supermarkeds-tilbud.
 Al UI-tekst er dansk; mange filnavne bruger `æøå`.
 

@@ -2,7 +2,7 @@
 
 - **Dato:** 2026-06-22
 - **Status:** Godkendt (tilgang B). Afventer spec-review før plan-eksekvering.
-- **Emne:** Gør Mæt land-bevidst, så hvert land har sit eget sprog, sine butikker,
+- **Emne:** Gør Mit Køkken land-bevidst, så hvert land har sit eget sprog, sine butikker,
   sine tilbudsaviser, sine priser/valuta og sine opskrifter. Denne omgang bygger
   **hele fundamentet** — Danmark er det eneste land med rigtigt indhold. At tilføje
   Norge/Sverige bagefter er **rent indhold** (dictionaries + tilbudsfiler + opskrifter),
@@ -10,7 +10,7 @@
 
 ## Baggrund
 
-Mæt er i dag 100 % Danmark-specifik på fem lag, alle implicit "DK":
+Mit Køkken er i dag 100 % Danmark-specifik på fem lag, alle implicit "DK":
 
 1. **Butikker** — hardkodede danske kæder (`constants/tilbud/*.ts`, onboarding/ProfilScreen).
 2. **Priser/valuta** — DKK, basispriser i `constants/basispriser.ts`.
@@ -59,7 +59,7 @@ til "aktivt land".
    Alt andet slår op her i stedet for at hardkode "Danmark/DKK/Netto…".
 3. **`LandContext`** (ny React-context) holder aktivt land, eksponerer `t()` og
    `formatPris()`, og kalder `sætAktivtLand()` ind i prismotoren ved boot/skift.
-   Cache i AsyncStorage → øjeblikkeligt korrekt sprog ved opstart (ingen DK-glimt).
+   Cache i expo-secure-store → øjeblikkeligt korrekt sprog ved opstart (ingen DK-glimt).
 4. **Hjemmebygget i18n** (intet tungt bibliotek): `constants/i18n/{da,no,sv}.ts` med en
    fælles `Oversættelser`-nøgletype; `no`/`sv` spreader `da` som base, så manglende
    nøgler **automatisk falder tilbage til dansk**. `t(nøgle, vars?)` interpolerer
@@ -94,7 +94,7 @@ create index if not exists tilbud_land_butik_uge_idx on public.tilbud (land, but
 
 ## Dataflow
 
-1. **Opstart:** `LandContext` læser cachet land fra AsyncStorage (default `'DK'`) →
+1. **Opstart:** `LandContext` læser cachet land fra expo-secure-store (default `'DK'`) →
    sætter sproget + kalder `sætAktivtLand()` ind i prismotoren med det samme. Når
    profilen er hentet, opdateres landet fra `profiles.country` (typisk identisk).
 2. **Onboarding:** nyt **første** trin "Vælg land" (flag-chips). Valget driver straks
@@ -123,14 +123,14 @@ Hver enhed har ét formål, et veldefineret interface og kendte afhængigheder.
 - **Afhænger af:** intet (ren data).
 
 ### `context/LandContext.tsx`
-- **Gør:** provider der holder aktivt `LandKode`; loader fra AsyncStorage-cache → profil;
+- **Gør:** provider der holder aktivt `LandKode`; loader fra SecureStore-cache → profil;
   `useLand()` returnerer `{ land, sætLand, t, formatPris }`. `sætLand` skriver `profiles.country`,
   cacher, kalder `sætAktivtLand()` (prismotor) og `synkroniserTilbud(true)`, og opdaterer state
   (app re-renderer). `t` er bundet til landets sprog.
 - **Bruges af:** App-roden (wrap omkring NavigationContainer), alle skærme via `useLand()`.
 - **Afhænger af:** `constants/lande.ts`, `constants/i18n`, `constants/format.ts`,
   `constants/tilbudspriser.ts` (`sætAktivtLand`), `lib/tilbudSync.ts`, `lib/supabase.ts`,
-  `@react-native-async-storage/async-storage`.
+  `expo-secure-store`.
 
 ### `constants/i18n/index.ts` + `da.ts` / `no.ts` / `sv.ts`
 - **Gør:** `da.ts` er kilde-dictionaryen (typen `Oversættelser` udledes af den). `no.ts`/`sv.ts`
