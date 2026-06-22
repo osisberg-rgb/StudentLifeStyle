@@ -1,4 +1,4 @@
-// Brandet loading-animation til ReciDeal. Erstatter den generiske
+// Brandet loading-animation til Mit Køkken. Erstatter den generiske
 // ActivityIndicator de steder hvor en hel skærm/flade venter. Bygget med
 // React Natives Animated (ingen CSS-keyframes i RN), tematiseret til appens
 // palette. Første variant: 'gryde' — en lille gryde der hopper, med et
