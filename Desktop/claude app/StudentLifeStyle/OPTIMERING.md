@@ -1,4 +1,4 @@
-# Optimerings-backlog — Mit Køkken
+# Optimerings-backlog — MadUgen
 
 Prioriteret liste over forbedringer. Impact: 🔴 høj · 🟡 mellem · ⚪ lav.
 Afkryds når et punkt er bygget. Hører sammen med `ROADMAP.md` (den overordnede plan).

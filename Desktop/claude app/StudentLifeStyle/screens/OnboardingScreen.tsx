@@ -1,4 +1,4 @@
-// Onboarding — brugerens FØRSTE møde med Mit Køkken. Rækkefølgen følger en
+// Onboarding — brugerens FØRSTE møde med MadUgen. Rækkefølgen følger en
 // psykologisk bue, der maksimerer interesse og investering:
 //   1) HOOK: social proof — vis værdien, bed ikke om noget endnu.
 //   2) ENGAGÉR: mål (let første "ja" = tap) → bekræftelse (belønning).
@@ -10,7 +10,7 @@
 //   6) ATTRIBUTION: hvor-hørt-om-os (lav indsats, sent — som ReciMe).
 //   7) BED OM: notifikationer + overvåg varer (efter MAX investering → ja).
 //   8) FEJR: payoff (peak-end — slut på en høj note).
-// Inspireret af de store mad-apps (ReciMe m.fl.), men i Mit Køkkens varme stil og
+// Inspireret af de store mad-apps (ReciMe m.fl.), men i MadUgens varme stil og
 // med ÆRLIG tekst (ingen opfundne bruger-tal). Rækkefølgen styres af TRIN-
 // arrayet; render-blokke keyes på navn, ikke tal, så trin kan flyttes/indsættes
 // uden omnummerering. Mål og kilde holdes kun i hukommelsen for nu.
@@ -283,7 +283,7 @@ export default function OnboardingScreen({ onDone }: Props) {
         <View style={styles.header}>
           <View style={styles.logoRow}>
             <Ionicons name="pricetag" size={20} color={Colors.green} style={{ marginRight: 7, marginTop: 2 }} />
-            <Text style={styles.logo}>Mit Køkken<Text style={{ color: Colors.red }}>.</Text></Text>
+            <Text style={styles.logo}>MadUgen<Text style={{ color: Colors.red }}>.</Text></Text>
           </View>
           <View style={styles.progressRow}>
             {trin > 0 ? (
@@ -349,7 +349,7 @@ export default function OnboardingScreen({ onDone }: Props) {
             <View style={styles.midtStil}>
               <Text style={styles.titel}>Perfekt 🙌</Text>
               <Text style={styles.broedtekst}>
-                Det er præcis det Mit Køkken er bygget til. Vi hjælper dig hele vejen — fra opskrift til indkøbskurv.
+                Det er præcis det MadUgen er bygget til. Vi hjælper dig hele vejen — fra opskrift til indkøbskurv.
               </Text>
               <View style={styles.heroBlob}>
                 <Text style={{ fontSize: 96 }}>🧑‍🍳</Text>
@@ -375,7 +375,7 @@ export default function OnboardingScreen({ onDone }: Props) {
             </>
           )}
 
-          {/* Import-guide — telefon-mockup der peger på Mit Køkkens +-ark */}
+          {/* Import-guide — telefon-mockup der peger på MadUgens +-ark */}
           {aktuel === 'import' && (
             <>
               <Text style={styles.titel}>Importér fra et link 🔗</Text>
@@ -793,7 +793,7 @@ function MetodeChip({ emoji, tekst }: { emoji: string; tekst: string }) {
   );
 }
 
-// Import-guiden — telefon-mockup af Mit Køkkens "+"-ark med en "Tryk her"-boble
+// Import-guiden — telefon-mockup af MadUgens "+"-ark med en "Tryk her"-boble
 // der bobber over "Indsæt et link". Lærer den faktiske import-flow (ikke en
 // iOS share-extension, som appen ikke har).
 function ImportGuideMock() {
@@ -867,7 +867,7 @@ function NotifBanner() {
         <View style={styles.notifIkon}><Text style={{ fontSize: 18 }}>🏷️</Text></View>
         <View style={{ flex: 1 }}>
           <View style={styles.notifTop}>
-            <Text style={styles.notifApp}>Mit Køkken</Text>
+            <Text style={styles.notifApp}>MadUgen</Text>
             <Text style={styles.notifTid}>nu</Text>
           </View>
           <Text style={styles.notifTekst}>Faxe Kondi er på tilbud i Netto denne uge 🎉</Text>

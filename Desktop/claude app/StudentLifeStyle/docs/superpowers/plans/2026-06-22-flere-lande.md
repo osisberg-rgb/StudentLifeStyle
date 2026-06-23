@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Gør Mit Køkken land-bevidst (DK/NO/SE) — hvert land får eget sprog, butikker, tilbudsaviser, valuta og opskrifter — med Danmark som det eneste land med rigtigt indhold. At tilføje NO/SE bagefter bliver rent indhold (dictionaries + tilbudsfiler + opskrifter), ingen kodeændringer.
+**Goal:** Gør MadUgen land-bevidst (DK/NO/SE) — hvert land får eget sprog, butikker, tilbudsaviser, valuta og opskrifter — med Danmark som det eneste land med rigtigt indhold. At tilføje NO/SE bagefter bliver rent indhold (dictionaries + tilbudsfiler + opskrifter), ingen kodeændringer.
 
 **Architecture:** Et aktivt land (`profiles.country`) styres via en delt modul-singleton (`constants/aktivtLand.ts`, samme mønster som `fjernKilder` i prismotoren) + en `LandContext`. Prismotor, basispriser og opskrift-accessorer læser det aktive land og rydder caches ved skift. Tilbud filtreres på `tilbud.land`. UI lokaliseres via en hjemmebygget `t()` med dansk fallback. Skallen (tabs, onboarding, profil) migreres som bevist mønster; resten inkrementalt.
 
@@ -1244,7 +1244,7 @@ Læs `ROADMAP.md`. Tilføj et afkrydset milepæls-punkt:
 ```
 Og en linje i beslutningsloggen (dagens dato):
 ```
-- **2026-06-22:** Mit Køkken gjort land-bevidst (tilgang B). Ét land pr. bruger (profiles.country), central constants/lande.ts, hjemmebygget t() med dansk fallback, prismotor/basispriser/opskrifter land-skopet via constants/aktivtLand.ts. Kun fundamentet — norsk/svensk indhold (tilbudsaviser, opskrifter, oversættelser) fyldes på uden kodeændringer. Spec/plan i docs/superpowers/.
+- **2026-06-22:** MadUgen gjort land-bevidst (tilgang B). Ét land pr. bruger (profiles.country), central constants/lande.ts, hjemmebygget t() med dansk fallback, prismotor/basispriser/opskrifter land-skopet via constants/aktivtLand.ts. Kun fundamentet — norsk/svensk indhold (tilbudsaviser, opskrifter, oversættelser) fyldes på uden kodeændringer. Spec/plan i docs/superpowers/.
 ```
 
 - [ ] **Step 2: Commit**

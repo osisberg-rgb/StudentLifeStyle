@@ -32,7 +32,7 @@ export default function BesparelsesHistorikModal({ synlig, samletTilbud, uger, o
         <ScrollView contentContainerStyle={styles.indhold} showsVerticalScrollIndicator={false}>
           {/* Akkumuleret hero */}
           <View style={styles.hero}>
-            <Text style={styles.heroLabel}>Tilbud brugt i alt med Mit Køkken</Text>
+            <Text style={styles.heroLabel}>Tilbud brugt i alt med MadUgen</Text>
             <Text style={styles.heroTal}>{samletTilbud}</Text>
             <Text style={styles.heroSub}>
               tilbuds-varer fordelt på {uger.length} {uger.length === 1 ? 'madplan' : 'madplaner'}

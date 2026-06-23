@@ -18,7 +18,7 @@ og at render-/udtræks-løkken køres manuelt på maskinen.
 ## Mål
 
 - Brugeren finder selv PDF'erne (manuelt — det er fint) og uploader dem **inde i
-  Mit Køkken-appen** via en admin-skærm.
+  MadUgen-appen** via en admin-skærm.
 - Hele renderingen + AI-udtrækningen kører **i skyen i baggrunden** — ikke på
   PC'en — og skriver til `tilbud`.
 - Brugeren ser status pr. butik i appen.
@@ -32,7 +32,7 @@ og at render-/udtræks-løkken køres manuelt på maskinen.
 
 ## Centrale beslutninger
 
-1. **Upload-sted:** in-app admin-skærm i Mit Køkken (ikke Storage-dashboard, ikke
+1. **Upload-sted:** in-app admin-skærm i MadUgen (ikke Storage-dashboard, ikke
    selvstændig webside).
 2. **Compute:** GitHub Actions kører det eksisterende, velafprøvede Node-udtræk i
    skyen (ikke en Deno-edge-renderer, ikke OpenAI PDF-input). Lavest risiko,

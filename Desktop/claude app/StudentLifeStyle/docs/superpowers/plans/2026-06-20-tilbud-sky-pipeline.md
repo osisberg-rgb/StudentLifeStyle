@@ -4,7 +4,7 @@
 
 **Goal:** Flyt den ugentlige tilbuds-udtrækning fra brugerens PC til skyen — udløst af en in-app admin-upload af PDF'erne — så appen aldrig skal opdateres.
 
-**Architecture:** Admin uploader PDF'er i Mit Køkken → Storage `tilbudsaviser/inbox/` + en `tilbud_import_job`-række → edge-funktionen `start-tilbud-import` (admin-JWT-gate) affyrer en GitHub `repository_dispatch` → en GitHub Action kører det *eksisterende* Node-udtræk (renderer sider, kalder `importer-tilbud`, skriver `tilbud`) og opdaterer job-status → appen viser status og henter `tilbud` live.
+**Architecture:** Admin uploader PDF'er i MadUgen → Storage `tilbudsaviser/inbox/` + en `tilbud_import_job`-række → edge-funktionen `start-tilbud-import` (admin-JWT-gate) affyrer en GitHub `repository_dispatch` → en GitHub Action kører det *eksisterende* Node-udtræk (renderer sider, kalder `importer-tilbud`, skriver `tilbud`) og opdaterer job-status → appen viser status og henter `tilbud` live.
 
 **Tech Stack:** React Native + Expo SDK 54 (TypeScript strict), Supabase (Postgres+RLS, Edge Functions/Deno, Storage), Node ESM-scripts (`pdf-to-img`), GitHub Actions.
 

@@ -41,7 +41,7 @@ export default function LoginScreen({ onNewUser }: Props) {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {/* Logo */}
         <View style={styles.logoRow}>
-          <Text style={styles.logo}>Mit Køkken</Text>
+          <Text style={styles.logo}>MadUgen</Text>
           <View style={styles.logoDot} />
         </View>
 

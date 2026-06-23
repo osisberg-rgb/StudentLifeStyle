@@ -1,4 +1,4 @@
-# Mit Køkken — Roadmap & forretningsguide
+# MadUgen — Roadmap & forretningsguide
 
 > Sidst opdateret: 18. juni 2026
 > Levende dokument — opdatér status-procenter og afkryds punkter løbende.

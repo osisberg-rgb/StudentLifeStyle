@@ -2,7 +2,7 @@
 
 - **Dato:** 2026-06-22
 - **Status:** Godkendt (tilgang B). Afventer spec-review før plan-eksekvering.
-- **Emne:** Gør Mit Køkken land-bevidst, så hvert land har sit eget sprog, sine butikker,
+- **Emne:** Gør MadUgen land-bevidst, så hvert land har sit eget sprog, sine butikker,
   sine tilbudsaviser, sine priser/valuta og sine opskrifter. Denne omgang bygger
   **hele fundamentet** — Danmark er det eneste land med rigtigt indhold. At tilføje
   Norge/Sverige bagefter er **rent indhold** (dictionaries + tilbudsfiler + opskrifter),
@@ -10,7 +10,7 @@
 
 ## Baggrund
 
-Mit Køkken er i dag 100 % Danmark-specifik på fem lag, alle implicit "DK":
+MadUgen er i dag 100 % Danmark-specifik på fem lag, alle implicit "DK":
 
 1. **Butikker** — hardkodede danske kæder (`constants/tilbud/*.ts`, onboarding/ProfilScreen).
 2. **Priser/valuta** — DKK, basispriser i `constants/basispriser.ts`.

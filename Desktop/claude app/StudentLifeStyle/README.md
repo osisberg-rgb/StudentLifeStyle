@@ -1,4 +1,4 @@
-# Mit Køkken 🍽️
+# MadUgen 🍽️
 
 Madplanlægger til **danske familier (30+) der gemmer opskrifter** og vil spare på
 aftensmaden med ugens supermarkeds-tilbud. Saml dine favoritopskrifter ét sted,
