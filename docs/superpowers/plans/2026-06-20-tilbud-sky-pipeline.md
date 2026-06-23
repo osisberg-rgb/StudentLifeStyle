@@ -14,10 +14,10 @@
 
 - **Intet test-runner.** Verifikationsgaten er `npx tsc --noEmit`. Konkret kommando (undgår `cd`):
   ```
-  node "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/node_modules/typescript/bin/tsc" -p "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/tsconfig.json" --noEmit
+  node "C:/Users/gust5/claude/StudentLifeStyle/node_modules/typescript/bin/tsc" -p "C:/Users/gust5/claude/StudentLifeStyle/tsconfig.json" --noEmit
   ```
   Forventet: ingen output, exit 0. `tsconfig.json` ekskluderer `supabase/`, og `scripts/*.mjs` er ikke TypeScript — så **kun app-filer** (`lib/`, `components/`, `screens/`) type-tjekkes. Edge-funktioner og scripts verificeres ved deploy/kørsel i stedet.
-- **Git:** repo-rod er `C:/Users/gust5/claude/StudentLifeStyle`, app ligger nested i `Desktop/claude app/StudentLifeStyle`. Commit altid med `git -C "C:/Users/gust5/claude/StudentLifeStyle" ...`. Arbejd på `main`. **Push kun når brugeren beder om det.** Afslut commit-beskeder med `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+- **Git:** repo-rod er `C:/Users/gust5/claude/StudentLifeStyle` (app ligger nu i repo-roden). Commit altid med `git -C "C:/Users/gust5/claude/StudentLifeStyle" ...`. Arbejd på `main`. **Push kun når brugeren beder om det.** Afslut commit-beskeder med `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 - **App-smoketest er bruger-drevet.** Boot IKKE emulator/`expo start` uopfordret (bruger-præference). Efter app-kode: kør tsc, og lad brugeren genindlæse selv.
 - **Supabase uden interaktiv login:** SQL via `pwsh scripts/sb-sql.ps1 -File <fil>`; token læses fra Windows Credential Manager (`Supabase CLI:supabase`). Projekt-ref: `oqolcifpmdybimspnadc`.
 
@@ -44,13 +44,13 @@
 ## Task 1: Tilføj `pdf-to-img` som afhængighed
 
 **Files:**
-- Modify: `Desktop/claude app/StudentLifeStyle/package.json`
+- Modify: `package.json`
 
 - [ ] **Step 1: Tilføj afhængigheden uden at oprette en lockfile**
 
 Repoet har ingen `package-lock.json` (bevidst) — brug `--no-package-lock` så vi kun ændrer `package.json`:
 ```
-node -e "process.chdir('C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle'); require('child_process').execSync('npm install pdf-to-img@^6.2.0 --no-package-lock --no-audit --no-fund', {stdio:'inherit'})"
+node -e "process.chdir('C:/Users/gust5/claude/StudentLifeStyle'); require('child_process').execSync('npm install pdf-to-img@^6.2.0 --no-package-lock --no-audit --no-fund', {stdio:'inherit'})"
 ```
 Forventet: `pdf-to-img` lander i `node_modules`, og `package.json` får linjen `"pdf-to-img": "^6.2.0"` under `dependencies`.
 
@@ -68,7 +68,7 @@ Forventet: `sider: <n>` og `side1 PNG bytes: <stort tal>`. Hvis det fejler med e
 
 - [ ] **Step 4: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/package.json"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "package.json"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'build: tilfoej pdf-to-img afhaengighed til sky-udtraek\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -77,7 +77,7 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'build: tilf
 ## Task 2: DB-migration — `tilbud_import_job` + RLS + Storage-policy
 
 **Files:**
-- Create: `Desktop/claude app/StudentLifeStyle/supabase/migrations/006_tilbud_import.sql`
+- Create: `supabase/migrations/006_tilbud_import.sql`
 
 - [ ] **Step 1: Skriv migrationen**
 
@@ -135,19 +135,19 @@ create policy "Admin opdater inbox" on storage.objects
 
 - [ ] **Step 2: Kør migrationen mod databasen**
 ```
-pwsh "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/scripts/sb-sql.ps1" -File "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/supabase/migrations/006_tilbud_import.sql"
+pwsh "C:/Users/gust5/claude/StudentLifeStyle/scripts/sb-sql.ps1" -File "C:/Users/gust5/claude/StudentLifeStyle/supabase/migrations/006_tilbud_import.sql"
 ```
 Forventet: JSON-svar uden `error` (typisk `[]` eller tomt resultat).
 
 - [ ] **Step 3: Verificér tabel + policies**
 ```
-pwsh "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/scripts/sb-sql.ps1" -Query "select count(*) as cols from information_schema.columns where table_name='tilbud_import_job';"
+pwsh "C:/Users/gust5/claude/StudentLifeStyle/scripts/sb-sql.ps1" -Query "select count(*) as cols from information_schema.columns where table_name='tilbud_import_job';"
 ```
 Forventet: `cols` = 10. Hvis en Storage-policy fejler fordi den allerede findes (`policy ... already exists`), er det ufarligt — fjern den dublerede `create policy`-blok og kør igen.
 
 - [ ] **Step 4: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/supabase/migrations/006_tilbud_import.sql"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "supabase/migrations/006_tilbud_import.sql"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(db): tilbud_import_job tabel + RLS + storage inbox-policy\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -156,8 +156,8 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(db): t
 ## Task 3: Delt udtræks-kerne + refaktorér det lokale script
 
 **Files:**
-- Create: `Desktop/claude app/StudentLifeStyle/scripts/tilbud-core.mjs`
-- Modify: `Desktop/claude app/StudentLifeStyle/scripts/opdater-tilbud.mjs`
+- Create: `scripts/tilbud-core.mjs`
+- Modify: `scripts/opdater-tilbud.mjs`
 
 - [ ] **Step 1: Skriv `scripts/tilbud-core.mjs`**
 
@@ -294,8 +294,8 @@ console.log('\nFærdig. Appen henter de nye tilbud automatisk.');
 
 - [ ] **Step 3: Syntaks-tjek begge scripts (parser uden at køre)**
 ```
-node --check "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/scripts/tilbud-core.mjs"
-node --check "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/scripts/opdater-tilbud.mjs"
+node --check "C:/Users/gust5/claude/StudentLifeStyle/scripts/tilbud-core.mjs"
+node --check "C:/Users/gust5/claude/StudentLifeStyle/scripts/opdater-tilbud.mjs"
 ```
 Forventet: ingen output, exit 0 for begge.
 
@@ -303,13 +303,13 @@ Forventet: ingen output, exit 0 for begge.
 
 Hvis du har en gyldig PDF og vil bekræfte hele kæden mod databasen, ret en sti i `BUTIKKER` og kør launcheren med få sider:
 ```
-pwsh "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/scripts/opdater-tilbud.ps1" -Uge 99 -MaxSider 1
+pwsh "C:/Users/gust5/claude/StudentLifeStyle/scripts/opdater-tilbud.ps1" -Uge 99 -MaxSider 1
 ```
 Forventet: `✓ <n> tilbud gemt`. (Uge 99 = throwaway, så rigtige uger ikke røres.) Spring over hvis ingen PDF er klar.
 
 - [ ] **Step 5: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/scripts/tilbud-core.mjs" "Desktop/claude app/StudentLifeStyle/scripts/opdater-tilbud.mjs"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "scripts/tilbud-core.mjs" "scripts/opdater-tilbud.mjs"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'refactor(scripts): udtraek deles i tilbud-core.mjs (lokal + cloud)\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -318,7 +318,7 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'refactor(sc
 ## Task 4: Cloud-script — henter PDF fra Storage og opdaterer job-status
 
 **Files:**
-- Create: `Desktop/claude app/StudentLifeStyle/scripts/opdater-tilbud-cloud.mjs`
+- Create: `scripts/opdater-tilbud-cloud.mjs`
 
 - [ ] **Step 1: Skriv `scripts/opdater-tilbud-cloud.mjs`**
 
@@ -385,13 +385,13 @@ console.log('\nFærdig.');
 
 - [ ] **Step 2: Syntaks-tjek**
 ```
-node --check "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/scripts/opdater-tilbud-cloud.mjs"
+node --check "C:/Users/gust5/claude/StudentLifeStyle/scripts/opdater-tilbud-cloud.mjs"
 ```
 Forventet: ingen output, exit 0.
 
 - [ ] **Step 3: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/scripts/opdater-tilbud-cloud.mjs"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "scripts/opdater-tilbud-cloud.mjs"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(scripts): cloud-udtraek henter PDF fra Storage + opdaterer job-status\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -400,7 +400,7 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(script
 ## Task 5: GitHub Action-workflow
 
 **Files:**
-- Create: `Desktop/claude app/StudentLifeStyle/.github/workflows/tilbud-import.yml`
+- Create: `.github/workflows/tilbud-import.yml`
 
 > Bemærk: `.git` ligger i repo-roden `C:/Users/gust5/claude/StudentLifeStyle`, så workflow-filen skal ligge i repo-roden under `.github/workflows/`. **Opret den i app-mappens `.github/` IKKE** — den skal ligge der GitHub kan se den (repo-roden). Stien herunder er relativ til repo-roden.
 
@@ -422,10 +422,10 @@ jobs:
         with:
           node-version: "22"
       - name: Installer afhængigheder
-        working-directory: "Desktop/claude app/StudentLifeStyle"
+        working-directory: "."
         run: npm install --no-audit --no-fund
       - name: Kør tilbuds-udtræk
-        working-directory: "Desktop/claude app/StudentLifeStyle"
+        working-directory: "."
         env:
           SB_SERVICE: ${{ secrets.SB_SERVICE }}
           SB_ANON: ${{ secrets.SB_ANON }}
@@ -452,7 +452,7 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'ci: workflo
 ## Task 6: Edge-funktion `start-tilbud-import`
 
 **Files:**
-- Create: `Desktop/claude app/StudentLifeStyle/supabase/functions/start-tilbud-import/index.ts`
+- Create: `supabase/functions/start-tilbud-import/index.ts`
 
 - [ ] **Step 1: Skriv funktionen**
 
@@ -520,7 +520,7 @@ function json(b: unknown, status = 200) {
 
 Sæt access-token (fra Credential Manager) og deploy med `--no-verify-jwt` (samme mønster som `send-tilbud-notifikationer`). Admin håndhæves i KODEN via `getUser()` — appen sender stadig brugerens token gennem `functions.invoke`, så `getUser()` kan validere det; `--no-verify-jwt` betyder blot at platformen ikke selv afviser kald uden token (så vores eksplicitte 403 bliver gaten og kan testes):
 ```
-pwsh -Command "& { . 'C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/scripts/sb-token.ps1'; npx supabase functions deploy start-tilbud-import --no-verify-jwt --project-ref oqolcifpmdybimspnadc }"
+pwsh -Command "& { . 'C:/Users/gust5/claude/StudentLifeStyle/scripts/sb-token.ps1'; npx supabase functions deploy start-tilbud-import --no-verify-jwt --project-ref oqolcifpmdybimspnadc }"
 ```
 > Hvis `scripts/sb-token.ps1` ikke findes/ikke eksporterer `$env:SUPABASE_ACCESS_TOKEN`, så genbrug Credential-Manager-snippetten fra `scripts/sb-sql.ps1` til at sætte `$env:SUPABASE_ACCESS_TOKEN` før `npx supabase functions deploy`. "Docker is not running"-advarslen er harmløs.
 
@@ -534,7 +534,7 @@ Forventet: `403 {\"error\":\"forbidden\"}` — beviser at funktionen er deployet
 
 - [ ] **Step 4: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/supabase/functions/start-tilbud-import/index.ts"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "supabase/functions/start-tilbud-import/index.ts"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(edge): start-tilbud-import affyrer GitHub dispatch (admin-gate)\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -543,7 +543,7 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(edge):
 ## Task 7: `lib/admin.ts`
 
 **Files:**
-- Create: `Desktop/claude app/StudentLifeStyle/lib/admin.ts`
+- Create: `lib/admin.ts`
 
 - [ ] **Step 1: Skriv filen**
 
@@ -567,7 +567,7 @@ Kør tsc-kommandoen fra "Vigtige projekt-konventioner". Forventet: ingen fejl.
 
 - [ ] **Step 3: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/lib/admin.ts"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "lib/admin.ts"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(lib): admin-allowlist + erAdmin()\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -576,7 +576,7 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(lib): 
 ## Task 8: `lib/tilbudUpload.ts`
 
 **Files:**
-- Create: `Desktop/claude app/StudentLifeStyle/lib/tilbudUpload.ts`
+- Create: `lib/tilbudUpload.ts`
 
 - [ ] **Step 1: Skriv filen**
 
@@ -667,7 +667,7 @@ Kør tsc-kommandoen. Forventet: ingen fejl. (Bemærk: `fetch`/`ArrayBuffer` find
 
 - [ ] **Step 3: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/lib/tilbudUpload.ts"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "lib/tilbudUpload.ts"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(lib): tilbudUpload (upload til inbox, opret job, start sky-import)\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -676,7 +676,7 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(lib): 
 ## Task 9: `components/UploadTilbudModal.tsx`
 
 **Files:**
-- Create: `Desktop/claude app/StudentLifeStyle/components/UploadTilbudModal.tsx`
+- Create: `components/UploadTilbudModal.tsx`
 
 - [ ] **Step 1: Skriv komponenten**
 
@@ -869,7 +869,7 @@ Kør tsc-kommandoen. Forventet: ingen fejl. Hvis `Chip`-propsene afviger (tjek `
 
 - [ ] **Step 3: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/components/UploadTilbudModal.tsx"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "components/UploadTilbudModal.tsx"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(ui): UploadTilbudModal (admin upload + status-poll)\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -878,7 +878,7 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(ui): U
 ## Task 10: Admin-indgang i ProfilScreen + GitHub-secrets
 
 **Files:**
-- Modify: `Desktop/claude app/StudentLifeStyle/screens/ProfilScreen.tsx`
+- Modify: `screens/ProfilScreen.tsx`
 
 - [ ] **Step 1: Tilføj imports**
 
@@ -930,7 +930,7 @@ Kør tsc-kommandoen. Forventet: ingen fejl.
 
 - [ ] **Step 6: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/screens/ProfilScreen.tsx"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "screens/ProfilScreen.tsx"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(profil): admin-indgang til Upload tilbudsavis\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -940,7 +940,7 @@ Disse skal sættes før første rigtige kørsel:
 
 1. **GitHub-token** til edge-funktionen. Opret en *fine-grained PAT* med adgang KUN til repoet `osisberg-rgb/StudentLifeStyle` og rettigheden **"Contents: Read and write"** (det er det `repository_dispatch` kræver). Sæt den som Supabase edge-secret:
    ```
-   pwsh -Command "& { . 'C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/scripts/sb-token.ps1'; npx supabase secrets set GITHUB_DISPATCH_TOKEN=github_pat_DIN_TOKEN --project-ref oqolcifpmdybimspnadc }"
+   pwsh -Command "& { . 'C:/Users/gust5/claude/StudentLifeStyle/scripts/sb-token.ps1'; npx supabase secrets set GITHUB_DISPATCH_TOKEN=github_pat_DIN_TOKEN --project-ref oqolcifpmdybimspnadc }"
    ```
 2. **Supabase-nøgler** som GitHub repo-secrets (henter du i Supabase-dashboardet → Project Settings → API keys):
    ```
@@ -958,7 +958,7 @@ Disse skal sættes før første rigtige kørsel:
 ## Task 11: ROADMAP + end-to-end verifikation
 
 **Files:**
-- Modify: `Desktop/claude app/StudentLifeStyle/ROADMAP.md`
+- Modify: `ROADMAP.md`
 
 - [ ] **Step 1: Opdater ROADMAP**
 
@@ -973,7 +973,7 @@ Og en linje i beslutningsloggen (med dagens dato):
 
 - [ ] **Step 2: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/ROADMAP.md"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "ROADMAP.md"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'docs(roadmap): sky-baseret tilbuds-import + beslutningslog\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -992,11 +992,11 @@ Agenten booter IKKE emulator. Brugeren tester selv:
 3. I GitHub → Actions skal "Tilbud-import" køre. Status i appen går `afventer → kører → færdig — N tilbud`.
 4. Verificér rækker:
    ```
-   pwsh "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/scripts/sb-sql.ps1" -Query "select butik, count(*) from tilbud where uge=99 group by butik;"
+   pwsh "C:/Users/gust5/claude/StudentLifeStyle/scripts/sb-sql.ps1" -Query "select butik, count(*) from tilbud where uge=99 group by butik;"
    ```
    Forventet: én række med antal > 0. Ryd op bagefter:
    ```
-   pwsh "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/scripts/sb-sql.ps1" -Query "delete from tilbud where uge=99;"
+   pwsh "C:/Users/gust5/claude/StudentLifeStyle/scripts/sb-sql.ps1" -Query "delete from tilbud where uge=99;"
    ```
 
 ---

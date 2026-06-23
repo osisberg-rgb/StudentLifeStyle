@@ -12,10 +12,10 @@ jobs:
         with:
           node-version: "22"
       - name: Installer afhængigheder
-        working-directory: "Desktop/claude app/StudentLifeStyle"
+        working-directory: "."
         run: npm install --no-audit --no-fund
       - name: Kør tilbuds-udtræk
-        working-directory: "Desktop/claude app/StudentLifeStyle"
+        working-directory: "."
         env:
           SB_SERVICE: ${{ secrets.SB_SERVICE }}
           SB_ANON: ${{ secrets.SB_ANON }}

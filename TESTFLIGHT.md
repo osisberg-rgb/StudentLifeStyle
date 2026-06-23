@@ -1,9 +1,8 @@
 # TestFlight — sådan får du MadUgen i luften (fra MacBook)
 
 > Skrevet 23. jun 2026. Formål: tag den committede kode → en iOS-build → TestFlight.
-> Builden kører i **EAS' sky** (ikke lokalt), så du behøver **ikke Xcode** og rammes
-> ikke af mellemrummet i mappestien (`claude app`). Alle kommandoer køres fra
-> **app-mappen**, ikke repo-roden.
+> Builden kører i **EAS' sky** (ikke lokalt), så du behøver **ikke Xcode**. Alle
+> kommandoer køres fra **repo-roden** (projektet ligger nu fladt i roden).
 
 ## 0) Forudsætninger (engangs — uden disse kan du ikke nå TestFlight)
 
@@ -15,13 +14,9 @@
 
 ## 1) Hent koden på Mac'en
 
-> ⚠️ Projektet ligger **ikke** i repo-roden, men nede i `Desktop/claude app/StudentLifeStyle/`
-> (mappenavnet har et mellemrum — derfor anførselstegnene). Det er bevidst beskrevet her,
-> fordi HANDOFF.md's `cd StudentLifeStyle` lander det forkerte sted.
-
 ```bash
 git clone https://github.com/osisberg-rgb/StudentLifeStyle.git
-cd "StudentLifeStyle/Desktop/claude app/StudentLifeStyle"
+cd StudentLifeStyle
 npm install
 ```
 
@@ -108,7 +103,7 @@ Efter installation på en testers telefon: tillad notifikationer → token lande
 
 ## Kendte fælder
 
-- **Kør altid fra app-mappen** (`Desktop/claude app/StudentLifeStyle/`), ikke repo-roden.
-  EAS advarer måske om at projektet ikke ligger i git-roden — det er OK for sky-builds.
-- **Lokale builds** (`eas build --local`) frarådes her pga. mellemrummet i stien — brug sky-build.
+- Projektet ligger nu **fladt i repo-roden** — kør alle kommandoer her (ingen nestet sti mere).
+- **Sky-build anbefales** (ingen Xcode nødvendig). Lokal build (`eas build --local`) virker nu også,
+  da stien ikke længere har mellemrum.
 - **`CRON_SECRET`/Supabase-secrets** er ikke i git; de er kun nødvendige for push-testen, ikke for selve TestFlight-builden.

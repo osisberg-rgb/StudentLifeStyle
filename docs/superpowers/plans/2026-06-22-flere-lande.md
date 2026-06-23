@@ -14,13 +14,13 @@
 
 - **Intet test-runner.** Verifikationsgaten er `npx tsc --noEmit`. Konkret kommando (undgår `cd`):
   ```
-  node "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/node_modules/typescript/bin/tsc" -p "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/tsconfig.json" --noEmit
+  node "C:/Users/gust5/claude/StudentLifeStyle/node_modules/typescript/bin/tsc" -p "C:/Users/gust5/claude/StudentLifeStyle/tsconfig.json" --noEmit
   ```
   Forventet: ingen output, exit 0. `tsconfig` ekskluderer `supabase/`; `scripts/*.mjs` er ikke TypeScript. Edge-funktioner/scripts verificeres ved deploy/`node --check`.
-- **Git:** repo-rod er `C:/Users/gust5/claude/StudentLifeStyle`, app ligger nested i `Desktop/claude app/StudentLifeStyle`. Commit altid med `git -C "C:/Users/gust5/claude/StudentLifeStyle" ...`. Arbejd på `main`. **Push kun når brugeren beder om det.** Afslut commit-beskeder med `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+- **Git:** repo-rod er `C:/Users/gust5/claude/StudentLifeStyle` (app ligger nu i repo-roden). Commit altid med `git -C "C:/Users/gust5/claude/StudentLifeStyle" ...`. Arbejd på `main`. **Push kun når brugeren beder om det.** Afslut commit-beskeder med `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 - **App-smoketest er bruger-drevet.** Boot IKKE emulator/`expo start` uopfordret. Efter app-kode: kør tsc, og lad brugeren genindlæse selv.
 - **Supabase uden interaktiv login:** SQL via `pwsh scripts/sb-sql.ps1 -Query "..."` eller `-File <fil>`; token læses fra Windows Credential Manager (`Supabase CLI:supabase`). Projekt-ref: `oqolcifpmdybimspnadc`. Repo-slug: `osisberg-rgb/StudentLifeStyle`.
-- **Filflytninger** bevarer historik med `git -C <rod> mv "<gammel>" "<ny>"`. Brug app-relative stier under `Desktop/claude app/StudentLifeStyle/`.
+- **Filflytninger** bevarer historik med `git -C <rod> mv "<gammel>" "<ny>"`. Brug app-relative stier under ``.
 
 ## Filstruktur
 
@@ -50,7 +50,7 @@
 ## Task 1: DB-migration — `country`/`land`-kolonner
 
 **Files:**
-- Create: `Desktop/claude app/StudentLifeStyle/supabase/migrations/007_flere_lande.sql`
+- Create: `supabase/migrations/007_flere_lande.sql`
 
 - [ ] **Step 1: Skriv migrationen**
 
@@ -73,19 +73,19 @@ create index if not exists tilbud_land_butik_uge_idx on public.tilbud (land, but
 
 - [ ] **Step 2: Kør migrationen**
 ```
-pwsh "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/scripts/sb-sql.ps1" -File "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/supabase/migrations/007_flere_lande.sql"
+pwsh "C:/Users/gust5/claude/StudentLifeStyle/scripts/sb-sql.ps1" -File "C:/Users/gust5/claude/StudentLifeStyle/supabase/migrations/007_flere_lande.sql"
 ```
 Forventet: JSON-svar uden `error`.
 
 - [ ] **Step 3: Verificér kolonnerne**
 ```
-pwsh "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/scripts/sb-sql.ps1" -Query "select count(*) as n from information_schema.columns where (table_name='profiles' and column_name='country') or (table_name='tilbud' and column_name='land') or (table_name='tilbud_import_job' and column_name='land');"
+pwsh "C:/Users/gust5/claude/StudentLifeStyle/scripts/sb-sql.ps1" -Query "select count(*) as n from information_schema.columns where (table_name='profiles' and column_name='country') or (table_name='tilbud' and column_name='land') or (table_name='tilbud_import_job' and column_name='land');"
 ```
 Forventet: `n` = 3. (Hvis `tilbud_import_job` ikke findes: `n` = 2 — fint, kolonnen tilføjes når tabellen oprettes.)
 
 - [ ] **Step 4: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/supabase/migrations/007_flere_lande.sql"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "supabase/migrations/007_flere_lande.sql"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(db): country/land-kolonner til flere lande\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -94,7 +94,7 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(db): c
 ## Task 2: `constants/lande.ts` — central land-konfiguration
 
 **Files:**
-- Create: `Desktop/claude app/StudentLifeStyle/constants/lande.ts`
+- Create: `constants/lande.ts`
 
 - [ ] **Step 1: Skriv filen**
 
@@ -150,7 +150,7 @@ export function landFor(kode: string | null | undefined): Land {
 
 - [ ] **Step 3: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/constants/lande.ts"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "constants/lande.ts"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(lande): central land-konfiguration (DK/NO/SE)\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -159,7 +159,7 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(lande)
 ## Task 3: `constants/aktivtLand.ts` — delt "aktivt land"-singleton
 
 **Files:**
-- Create: `Desktop/claude app/StudentLifeStyle/constants/aktivtLand.ts`
+- Create: `constants/aktivtLand.ts`
 
 - [ ] **Step 1: Skriv filen**
 
@@ -196,7 +196,7 @@ export function påLandSkift(fn: () => void): () => void {
 
 - [ ] **Step 3: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/constants/aktivtLand.ts"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "constants/aktivtLand.ts"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(lande): delt aktivt-land singleton med lytter-mekanisme\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -205,10 +205,10 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(lande)
 ## Task 4: i18n — dictionaries + `t()` med dansk fallback
 
 **Files:**
-- Create: `Desktop/claude app/StudentLifeStyle/constants/i18n/da.ts`
-- Create: `Desktop/claude app/StudentLifeStyle/constants/i18n/no.ts`
-- Create: `Desktop/claude app/StudentLifeStyle/constants/i18n/sv.ts`
-- Create: `Desktop/claude app/StudentLifeStyle/constants/i18n/index.ts`
+- Create: `constants/i18n/da.ts`
+- Create: `constants/i18n/no.ts`
+- Create: `constants/i18n/sv.ts`
+- Create: `constants/i18n/index.ts`
 
 - [ ] **Step 1: Skriv `da.ts` (kilde-dictionaryen — definerer nøgletypen)**
 
@@ -311,7 +311,7 @@ export type { Nøgle };
 
 - [ ] **Step 6: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/constants/i18n"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "constants/i18n"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(i18n): t() med da/no/sv dictionaries og dansk fallback\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -320,7 +320,7 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(i18n):
 ## Task 5: `constants/format.ts` — valuta/pris-format
 
 **Files:**
-- Create: `Desktop/claude app/StudentLifeStyle/constants/format.ts`
+- Create: `constants/format.ts`
 
 - [ ] **Step 1: Skriv filen**
 
@@ -350,7 +350,7 @@ export function formatPris(kr: number, land: LandKode): string {
 
 - [ ] **Step 3: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/constants/format.ts"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "constants/format.ts"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(format): land-baseret formatPris (DKK/NOK/SEK)\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -359,17 +359,17 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(format
 ## Task 6: Land-skopede basispriser (omdøb `basispriser.ts` → mappe)
 
 **Files:**
-- Create: `Desktop/claude app/StudentLifeStyle/constants/basispriser/dk.ts` (flyttet data)
-- Create: `Desktop/claude app/StudentLifeStyle/constants/basispriser/no.ts`
-- Create: `Desktop/claude app/StudentLifeStyle/constants/basispriser/se.ts`
-- Create: `Desktop/claude app/StudentLifeStyle/constants/basispriser/index.ts`
-- Delete: `Desktop/claude app/StudentLifeStyle/constants/basispriser.ts`
+- Create: `constants/basispriser/dk.ts` (flyttet data)
+- Create: `constants/basispriser/no.ts`
+- Create: `constants/basispriser/se.ts`
+- Create: `constants/basispriser/index.ts`
+- Delete: `constants/basispriser.ts`
 
 > Import-stier som `'../constants/basispriser'` og `'./basispriser'` peger nu på mappens `index.ts` og virker uændret. Eneste in-app-importører: `constants/tilbudspriser.ts` (`slagBasispris`, `slåPrisOp`, `matcherSoegeord`) og `lib/brugerOpskrifter.ts` (`gætSoeg`). `scripts/test-tilbud.ts` importerer `BASISPRISER` (back-compat-eksport bevares).
 
 - [ ] **Step 1: Flyt den nuværende fil til `dk.ts` (bevarer historik)**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" mv "Desktop/claude app/StudentLifeStyle/constants/basispriser.ts" "Desktop/claude app/StudentLifeStyle/constants/basispriser/dk.ts"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" mv "constants/basispriser.ts" "constants/basispriser/dk.ts"
 ```
 
 - [ ] **Step 2: Reducér `dk.ts` til KUN data**
@@ -467,7 +467,7 @@ export function slåPrisOp(ing: {
 
 - [ ] **Step 7: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/constants/basispriser"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "constants/basispriser"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'refactor(priser): land-skopede basispriser (dk/no/se + index)\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -477,22 +477,22 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'refactor(pr
 
 **Files:**
 - Move: `constants/tilbud/{rema1000,netto,fotex,superbrugsen,bilka,lidl,kvikly,365discount}.ts` → `constants/tilbud/dk/`
-- Create: `Desktop/claude app/StudentLifeStyle/constants/tilbud/dk/index.ts`
-- Create: `Desktop/claude app/StudentLifeStyle/constants/tilbud/no/index.ts`
-- Create: `Desktop/claude app/StudentLifeStyle/constants/tilbud/se/index.ts`
-- Create: `Desktop/claude app/StudentLifeStyle/constants/tilbud/index.ts`
-- Modify: `Desktop/claude app/StudentLifeStyle/constants/tilbudspriser.ts`
+- Create: `constants/tilbud/dk/index.ts`
+- Create: `constants/tilbud/no/index.ts`
+- Create: `constants/tilbud/se/index.ts`
+- Create: `constants/tilbud/index.ts`
+- Modify: `constants/tilbudspriser.ts`
 
 - [ ] **Step 1: Flyt de 8 tilbudsfiler til `dk/`**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" mv "Desktop/claude app/StudentLifeStyle/constants/tilbud/rema1000.ts"    "Desktop/claude app/StudentLifeStyle/constants/tilbud/dk/rema1000.ts"
-git -C "C:/Users/gust5/claude/StudentLifeStyle" mv "Desktop/claude app/StudentLifeStyle/constants/tilbud/netto.ts"       "Desktop/claude app/StudentLifeStyle/constants/tilbud/dk/netto.ts"
-git -C "C:/Users/gust5/claude/StudentLifeStyle" mv "Desktop/claude app/StudentLifeStyle/constants/tilbud/fotex.ts"       "Desktop/claude app/StudentLifeStyle/constants/tilbud/dk/fotex.ts"
-git -C "C:/Users/gust5/claude/StudentLifeStyle" mv "Desktop/claude app/StudentLifeStyle/constants/tilbud/superbrugsen.ts" "Desktop/claude app/StudentLifeStyle/constants/tilbud/dk/superbrugsen.ts"
-git -C "C:/Users/gust5/claude/StudentLifeStyle" mv "Desktop/claude app/StudentLifeStyle/constants/tilbud/bilka.ts"       "Desktop/claude app/StudentLifeStyle/constants/tilbud/dk/bilka.ts"
-git -C "C:/Users/gust5/claude/StudentLifeStyle" mv "Desktop/claude app/StudentLifeStyle/constants/tilbud/lidl.ts"        "Desktop/claude app/StudentLifeStyle/constants/tilbud/dk/lidl.ts"
-git -C "C:/Users/gust5/claude/StudentLifeStyle" mv "Desktop/claude app/StudentLifeStyle/constants/tilbud/kvikly.ts"      "Desktop/claude app/StudentLifeStyle/constants/tilbud/dk/kvikly.ts"
-git -C "C:/Users/gust5/claude/StudentLifeStyle" mv "Desktop/claude app/StudentLifeStyle/constants/tilbud/365discount.ts" "Desktop/claude app/StudentLifeStyle/constants/tilbud/dk/365discount.ts"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" mv "constants/tilbud/rema1000.ts"    "constants/tilbud/dk/rema1000.ts"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" mv "constants/tilbud/netto.ts"       "constants/tilbud/dk/netto.ts"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" mv "constants/tilbud/fotex.ts"       "constants/tilbud/dk/fotex.ts"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" mv "constants/tilbud/superbrugsen.ts" "constants/tilbud/dk/superbrugsen.ts"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" mv "constants/tilbud/bilka.ts"       "constants/tilbud/dk/bilka.ts"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" mv "constants/tilbud/lidl.ts"        "constants/tilbud/dk/lidl.ts"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" mv "constants/tilbud/kvikly.ts"      "constants/tilbud/dk/kvikly.ts"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" mv "constants/tilbud/365discount.ts" "constants/tilbud/dk/365discount.ts"
 ```
 
 - [ ] **Step 2: Skriv `constants/tilbud/dk/index.ts` (barrel — samme 5 kilder som i dag)**
@@ -599,7 +599,7 @@ påLandSkift(() => {
 
 - [ ] **Step 7: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/constants/tilbud" "Desktop/claude app/StudentLifeStyle/constants/tilbudspriser.ts"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "constants/tilbud" "constants/tilbudspriser.ts"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'refactor(tilbud): per-land tilbudsfiler + land-skopet prismotor\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -608,7 +608,7 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'refactor(ti
 ## Task 8: `lib/tilbudSync.ts` — filtrér tilbud på land
 
 **Files:**
-- Modify: `Desktop/claude app/StudentLifeStyle/lib/tilbudSync.ts`
+- Modify: `lib/tilbudSync.ts`
 
 - [ ] **Step 1: Filtrér queryen på aktivt land**
 
@@ -635,7 +635,7 @@ med (filtrér på aktivt land):
 
 - [ ] **Step 3: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/lib/tilbudSync.ts"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "lib/tilbudSync.ts"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(tilbud): synk filtrerer paa aktivt land\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -644,8 +644,8 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(tilbud
 ## Task 9: Opskrifter — land-tag + filtrering
 
 **Files:**
-- Modify: `Desktop/claude app/StudentLifeStyle/types/opskrift.ts`
-- Modify: `Desktop/claude app/StudentLifeStyle/lib/brugerOpskrifter.ts`
+- Modify: `types/opskrift.ts`
+- Modify: `lib/brugerOpskrifter.ts`
 
 - [ ] **Step 1: Tilføj `lande`-feltet til `Opskrift`**
 
@@ -698,7 +698,7 @@ påLandSkift(() => { version++; });
 
 - [ ] **Step 4: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/types/opskrift.ts" "Desktop/claude app/StudentLifeStyle/lib/brugerOpskrifter.ts"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "types/opskrift.ts" "lib/brugerOpskrifter.ts"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(opskrifter): land-tag + land-filtrering af statiske opskrifter\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -707,7 +707,7 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(opskri
 ## Task 10: `context/LandContext.tsx` — provideren der binder det hele
 
 **Files:**
-- Create: `Desktop/claude app/StudentLifeStyle/context/LandContext.tsx`
+- Create: `context/LandContext.tsx`
 
 - [ ] **Step 1: Skriv provideren**
 
@@ -795,7 +795,7 @@ export function useLand(): LandCtx {
 
 - [ ] **Step 3: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/context/LandContext.tsx"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "context/LandContext.tsx"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(land): LandContext (aktivt land, t, formatPris, saetLand)\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -804,7 +804,7 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(land):
 ## Task 11: `App.tsx` — wrap i LandProvider + tab-labels via t()
 
 **Files:**
-- Modify: `Desktop/claude app/StudentLifeStyle/App.tsx`
+- Modify: `App.tsx`
 
 - [ ] **Step 1: Importér provideren + useLand**
 
@@ -852,7 +852,7 @@ I `export default function App()` (linje 256), skift retur-blokken så `LandProv
 
 - [ ] **Step 5: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/App.tsx"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "App.tsx"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(app): LandProvider + tab-labels via t()\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -861,7 +861,7 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(app): 
 ## Task 12: Onboarding — nyt land-trin forrest
 
 **Files:**
-- Modify: `Desktop/claude app/StudentLifeStyle/screens/OnboardingScreen.tsx`
+- Modify: `screens/OnboardingScreen.tsx`
 
 > Mønster for resten af strengene: denne task migrerer det NYE land-trin (via `t()`) og gør butiks-/opskrift-/valuta-data land-afhængige. De øvrige danske strenge på skærmen kan migreres inkrementalt ved at flytte hver streng til `da.ts` og kalde `t('...')` — ingen arkitektur-ændring.
 
@@ -987,7 +987,7 @@ I `kanVidere` (linje 232–238), tilføj en linje så land-trinnet er gyldigt (v
 
 - [ ] **Step 10: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/screens/OnboardingScreen.tsx"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "screens/OnboardingScreen.tsx"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(onboarding): land-trin forrest styrer butikker/opskrifter/valuta\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -996,7 +996,7 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(onboar
 ## Task 13: Profil — "Land"-række + land-vælger
 
 **Files:**
-- Modify: `Desktop/claude app/StudentLifeStyle/screens/ProfilScreen.tsx`
+- Modify: `screens/ProfilScreen.tsx`
 
 > Læs `screens/ProfilScreen.tsx` først for at se de faktiske style-navne (`styles.kort`, `styles.række`, `styles.sektionLabel`, `styles.rækkeLabel`, `styles.værditekst` el.lign.) — brug dem der matcher filen. Stinavnene nedenfor følger mønsteret fra sky-pipeline-planens admin-række.
 
@@ -1068,7 +1068,7 @@ Lige før den afsluttende `</SafeAreaView>` (sammen med de øvrige modaler på s
 
 - [ ] **Step 6: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/screens/ProfilScreen.tsx"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "screens/ProfilScreen.tsx"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(profil): land-vaelger der re-lokaliserer appen\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -1077,12 +1077,12 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(profil
 ## Task 14: Pipeline — `land`-dimension i upload + udtræk
 
 **Files:**
-- Modify: `Desktop/claude app/StudentLifeStyle/scripts/tilbud-core.mjs`
-- Modify: `Desktop/claude app/StudentLifeStyle/scripts/opdater-tilbud.mjs`
-- Modify: `Desktop/claude app/StudentLifeStyle/scripts/opdater-tilbud-cloud.mjs`
-- Modify: `Desktop/claude app/StudentLifeStyle/supabase/functions/start-tilbud-import/index.ts`
-- Modify: `Desktop/claude app/StudentLifeStyle/lib/tilbudUpload.ts`
-- Modify: `Desktop/claude app/StudentLifeStyle/components/UploadTilbudModal.tsx`
+- Modify: `scripts/tilbud-core.mjs`
+- Modify: `scripts/opdater-tilbud.mjs`
+- Modify: `scripts/opdater-tilbud-cloud.mjs`
+- Modify: `supabase/functions/start-tilbud-import/index.ts`
+- Modify: `lib/tilbudUpload.ts`
+- Modify: `components/UploadTilbudModal.tsx`
 
 > Mål: tilbud-rækker og import-jobs skrives med `land`. Default `'DK'` overalt bevarer nuværende adfærd. (Workflow-filen `.github/workflows/tilbud-import.yml` behøver ingen ændring — den videresender hele payloaden, der nu også bærer `land`.)
 
@@ -1211,21 +1211,21 @@ Indsæt en land-chip-række øverst i `ScrollView` (før uge-rækken):
 
 - [ ] **Step 7: Verificér scripts + tsc**
 ```
-node --check "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/scripts/tilbud-core.mjs"
-node --check "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/scripts/opdater-tilbud.mjs"
-node --check "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/scripts/opdater-tilbud-cloud.mjs"
+node --check "C:/Users/gust5/claude/StudentLifeStyle/scripts/tilbud-core.mjs"
+node --check "C:/Users/gust5/claude/StudentLifeStyle/scripts/opdater-tilbud.mjs"
+node --check "C:/Users/gust5/claude/StudentLifeStyle/scripts/opdater-tilbud-cloud.mjs"
 ```
 Forventet: exit 0 for alle tre. Kør derefter tsc-kommandoen for app-filerne (`lib/tilbudUpload.ts`, `components/UploadTilbudModal.tsx`). Forventet: ingen fejl.
 
 - [ ] **Step 8: Deploy edge-funktionen (hvis ændret i Step 4)**
 ```
-pwsh -Command "& { . 'C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/scripts/sb-token.ps1'; npx supabase functions deploy start-tilbud-import --no-verify-jwt --project-ref oqolcifpmdybimspnadc }"
+pwsh -Command "& { . 'C:/Users/gust5/claude/StudentLifeStyle/scripts/sb-token.ps1'; npx supabase functions deploy start-tilbud-import --no-verify-jwt --project-ref oqolcifpmdybimspnadc }"
 ```
 Forventet: `Deployed Function start-tilbud-import`. (Spring over hvis Step 4 ikke ændrede koden.)
 
 - [ ] **Step 9: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/scripts/tilbud-core.mjs" "Desktop/claude app/StudentLifeStyle/scripts/opdater-tilbud.mjs" "Desktop/claude app/StudentLifeStyle/scripts/opdater-tilbud-cloud.mjs" "Desktop/claude app/StudentLifeStyle/supabase/functions/start-tilbud-import/index.ts" "Desktop/claude app/StudentLifeStyle/lib/tilbudUpload.ts" "Desktop/claude app/StudentLifeStyle/components/UploadTilbudModal.tsx"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "scripts/tilbud-core.mjs" "scripts/opdater-tilbud.mjs" "scripts/opdater-tilbud-cloud.mjs" "supabase/functions/start-tilbud-import/index.ts" "lib/tilbudUpload.ts" "components/UploadTilbudModal.tsx"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(pipeline): land-dimension i tilbuds-upload og -udtraek\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -1234,7 +1234,7 @@ git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'feat(pipeli
 ## Task 15: ROADMAP + end-to-end verifikation
 
 **Files:**
-- Modify: `Desktop/claude app/StudentLifeStyle/ROADMAP.md`
+- Modify: `ROADMAP.md`
 
 - [ ] **Step 1: Opdater ROADMAP**
 
@@ -1249,7 +1249,7 @@ Og en linje i beslutningsloggen (dagens dato):
 
 - [ ] **Step 2: Commit**
 ```
-git -C "C:/Users/gust5/claude/StudentLifeStyle" add "Desktop/claude app/StudentLifeStyle/ROADMAP.md"
+git -C "C:/Users/gust5/claude/StudentLifeStyle" add "ROADMAP.md"
 git -C "C:/Users/gust5/claude/StudentLifeStyle" commit -m "$(printf 'docs(roadmap): flere lande-fundament + beslutningslog\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>')"
 ```
 
@@ -1259,8 +1259,8 @@ Kør tsc-kommandoen fra "Vigtige projekt-konventioner". Forventet: ingen output,
 
 - [ ] **Step 4: DB-røgtest**
 ```
-pwsh "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/scripts/sb-sql.ps1" -Query "select country, count(*) from profiles group by country;"
-pwsh "C:/Users/gust5/claude/StudentLifeStyle/Desktop/claude app/StudentLifeStyle/scripts/sb-sql.ps1" -Query "select land, count(*) from tilbud group by land;"
+pwsh "C:/Users/gust5/claude/StudentLifeStyle/scripts/sb-sql.ps1" -Query "select country, count(*) from profiles group by country;"
+pwsh "C:/Users/gust5/claude/StudentLifeStyle/scripts/sb-sql.ps1" -Query "select land, count(*) from tilbud group by land;"
 ```
 Forventet: alle eksisterende rækker har `country='DK'` / `land='DK'` (backfill).
 
