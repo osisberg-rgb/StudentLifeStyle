@@ -98,11 +98,13 @@ const CORAL = Colors.red;         // hjertet
 const OLIVE = Colors.greenBright; // bladet
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: 'center', justifyContent: 'center' },
-  // paddingHorizontal: giver glyfferne luft, så hverken iOS eller Android klipper
-  // sidste bogstav af en centreret enkeltlinje (sub-pixel-afrunding af tekstbredden).
-  tekst: { marginTop: 20, paddingHorizontal: 16, fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.ink, textAlign: 'center' },
-  hint: { marginTop: 6, paddingHorizontal: 16, fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, textAlign: 'center' },
+  // alignSelf:'stretch' gør wrap (og teksterne) fuld-bredde, så en centreret
+  // enkeltlinje IKKE måles til sin egen afrundede bredde — det er den måling der
+  // får iOS til at klippe sidste bogstav. Med fuld bredde + textAlign:center er
+  // der altid rigeligt plads. paddingHorizontal holder afstand til skærmkanten.
+  wrap: { alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
+  tekst: { marginTop: 20, alignSelf: 'stretch', paddingHorizontal: 16, fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.ink, textAlign: 'center' },
+  hint: { marginTop: 6, alignSelf: 'stretch', paddingHorizontal: 16, fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, textAlign: 'center' },
 
   potLoader: { width: 96, height: 96, position: 'relative' },
 
