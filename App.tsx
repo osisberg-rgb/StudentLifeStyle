@@ -221,7 +221,7 @@ function RootNavigator() {
   if (loading || (session && !profilTjekket)) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.paper }}>
-        <Loader tekst="Gør køkkenet klar" />
+        <Loader tekst="Gør MadUgen klar" />
       </View>
     );
   }
@@ -269,7 +269,7 @@ export default function App() {
   if (!fontsLoaded) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.paper }}>
-        <Loader tekst="Gør køkkenet klar" />
+        <Loader tekst="Gør MadUgen klar" />
       </View>
     );
   }
