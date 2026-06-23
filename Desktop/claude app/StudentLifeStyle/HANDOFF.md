@@ -124,7 +124,7 @@ Indkøb/OpskriftDetalje, Profil-sektion, token-registrering ved opstart.
 ## Hvad mangler / næste skridt (prioriteret)
 
 1. **Fase C:** EAS dev build + ægte push-test (det første du gør på Mac'en).
-2. **App Store:** Apple Developer-konto (99 USD/år), EAS Submit/TestFlight. Se `LANCERING.md`.
+2. **App Store / TestFlight:** Apple Developer-konto (99 USD/år) + EAS Submit. **Trin-for-trin: `TESTFLIGHT.md`** (`eas.json` + iOS `bundleIdentifier` + billede-tilladelser er allerede sat i repo'et). Se også `LANCERING.md`.
 3. **Opskriftsbibliotek:** flere retter bredt + dessert-billeder.
 4. **Tilbuds-automatisering polish:** bedre soeg-tagging eller et review-trin før data går live.
 5. **Pris-motor-tests mod ægte kode** (i dag JS-spejle i `scripts/test-*.mjs`).

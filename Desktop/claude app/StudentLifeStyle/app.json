@@ -7,7 +7,8 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "dk.madugen.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +24,14 @@
     },
     "plugins": [
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MadUgen bruger dine billeder til at importere opskrifter fra et screenshot eller foto.",
+          "cameraPermission": "MadUgen bruger kameraet til at tage et billede af en opskrift."
+        }
+      ]
     ]
   }
 }
