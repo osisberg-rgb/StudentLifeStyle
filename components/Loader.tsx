@@ -99,10 +99,10 @@ const OLIVE = Colors.greenBright; // bladet
 
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', justifyContent: 'center' },
-  // paddingHorizontal: giver glyfferne luft, så Android ikke klipper sidste
-  // bogstav af en centreret enkeltlinje (sub-pixel-afrunding af tekstbredden).
-  tekst: { marginTop: 20, paddingHorizontal: 8, fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.ink, textAlign: 'center' },
-  hint: { marginTop: 6, paddingHorizontal: 8, fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, textAlign: 'center' },
+  // paddingHorizontal: giver glyfferne luft, så hverken iOS eller Android klipper
+  // sidste bogstav af en centreret enkeltlinje (sub-pixel-afrunding af tekstbredden).
+  tekst: { marginTop: 20, paddingHorizontal: 16, fontSize: 15, fontFamily: 'Inter_600SemiBold', color: Colors.ink, textAlign: 'center' },
+  hint: { marginTop: 6, paddingHorizontal: 16, fontSize: 13, fontFamily: 'Inter_400Regular', color: Colors.inkSoft, textAlign: 'center' },
 
   potLoader: { width: 96, height: 96, position: 'relative' },
 
