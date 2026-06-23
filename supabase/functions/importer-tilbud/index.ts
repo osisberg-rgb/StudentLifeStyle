@@ -1,5 +1,6 @@
 // Udtræk tilbud fra ÉN side af en dansk tilbudsavis (billede). Ren scanner:
-// gemmer INTET — returnerer {varer:[{navn,pris,soeg}]}. Det lokale opdater-script
+// gemmer INTET — returnerer {varer:[{navn,pris,soeg}], forventet_antal}. forventet_antal
+// er modellens egen optælling, så cloud-scriptet kan opdage under-tælling. Det lokale opdater-script
 // (scripts/opdater-tilbud.mjs) kalder funktionen pr. side, samler resultaterne
 // og upsert'er til `tilbud`-tabellen for (butik, uge). Genbruger samme GPT-mønster
 // og soeg-ordforråd som importer-opskrift, så priserne kan matche appens motor.
@@ -51,6 +52,16 @@ function matcherSoegeord(tekst: string, soegeord: string): boolean {
 }
 
 type Vare = { navn: string; pris: number; soeg: string[] };
+type RaaVare = { navn: string; pris: number; tilbudstype?: string; betingelse?: string };
+
+// Udled op til 3 soeg-ord fra varenavnet (mest specifikke ord først). soeg
+// kommer IKKE fra modellen længere — det stjæler fokus fra at finde ALLE varer.
+function udledSoeg(navn: string): string[] {
+  return SOEG_VOCAB
+    .filter((vok) => matcherSoegeord(navn, vok))
+    .sort((a, b) => b.length - a.length)
+    .slice(0, 3);
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -61,51 +72,63 @@ Deno.serve(async (req) => {
     }
 
     const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY")! });
-    const ordliste = SOEG_VOCAB.join(", ");
+
+    const prompt =
+      "Du er ekspert i at læse danske supermarkeds-tilbudsaviser. Du får ÉT " +
+      "billede af én side. Sider kan være MEGET tætpakkede med 20-40 små " +
+      "vare-fliser — din vigtigste opgave er at finde ALLE, ikke kun de tydelige.\n\n" +
+      "ARBEJDSGANG (følg den præcist):\n" +
+      "1. Scan systematisk: øverste række venstre→højre, derefter næste række, osv. " +
+      "Husk små fliser, kant-bånd, hjørne-bokse og fod-striben. Spring INTET over.\n" +
+      "2. Tæl FØRST hvor mange separate pris-mærker du kan se på siden.\n" +
+      "3. Udtræk så ét objekt pr. tilbud, til antallet matcher din optælling.\n\n" +
+      "FOR HVERT TILBUD:\n" +
+      "- navn: produktnavnet som det står (inkl. mærke hvis synligt).\n" +
+      "- pris: prisen i kr. som tal (fx 18 eller 12.95). Ved multibuy (\"3 for 20\"): " +
+      "pris = pris PR. STK = total ÷ antal (20/3 = 6.67), afrundet til 2 decimaler. " +
+      "Ved \"spar/%\": pris = den faktiske tilbudspris hvis den vises, ellers null.\n" +
+      "- tilbudstype: \"stk\" | \"multibuy\" | \"rabat\".\n" +
+      "- betingelse: betingelsesteksten ordret hvis relevant (\"3 for 20\", \"spar 30%\", " +
+      "\"min. 2 stk\"), ellers \"\".\n\n" +
+      "MEDTAG: alle madvarer + drikkevarer (kaffe, sodavand, øl, vin, is).\n" +
+      "SPRING OVER: rene reklamer, opskrifter, konkurrencer, non-food (medmindre drikkevare).\n" +
+      "Er du i tvivl om en flise er en vare → MEDTAG den hellere.\n\n" +
+      "Returnér KUN JSON: " +
+      "{\"forventet_antal\":0,\"varer\":[{\"navn\":\"...\",\"pris\":0,\"tilbudstype\":\"stk\",\"betingelse\":\"\"}]}";
 
     const res = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       temperature: 0.1,
+      max_tokens: 4096,
       response_format: { type: "json_object" },
       messages: [
         {
           role: "user",
           content: [
-            {
-              type: "text",
-              text:
-                "Du får ÉT billede af én side fra en dansk supermarkeds-tilbudsavis. " +
-                "Udtræk ALLE tilbud på siden. For hvert tilbud returnér: " +
-                "`navn` (produktnavnet som det står), `pris` (tilbudsprisen i kr som tal, fx 18 eller 12.95), " +
-                "og `soeg` (0-3 ord der beskriver varen, VALGT FRA ORDLISTEN nedenfor — udelad ord der ikke passer; tom liste hvis intet passer). " +
-                "Medtag KUN varer med en tydelig pris. Spring reklamer, opskrifter, konkurrencer og ikke-madvarer over (undtagen kaffe/sodavand/øl/is som er i listen). " +
-                "Returnér JSON på formen {\"varer\":[{\"navn\":\"...\",\"pris\":0,\"soeg\":[\"...\"]}]}.\n\n" +
-                "ORDLISTE: " + ordliste,
-            },
-            { type: "image_url", image_url: { url: billede } },
+            { type: "text", text: prompt },
+            // detail:"high" → OpenAI tiler billedet (512px-fliser) så småtryk/priser læses
+            { type: "image_url", image_url: { url: billede, detail: "high" } },
           ],
         },
       ],
     });
 
     const raw = res.choices[0]?.message?.content ?? "{}";
-    let parsed: { varer?: Vare[] };
+    let parsed: { varer?: RaaVare[]; forventet_antal?: number };
     try { parsed = JSON.parse(raw); } catch { parsed = {}; }
 
-    // Rens: kun gyldige priser, og soeg-ord begrænses til ordforrådet.
+    // Rens: kun gyldige priser; soeg-ord udledes fra navnet mod ordforrådet.
     const varer: Vare[] = (parsed.varer ?? [])
       .filter((v) => v && typeof v.navn === "string" && Number.isFinite(Number(v.pris)))
       .map((v) => ({
         navn: String(v.navn).trim(),
         pris: Number(v.pris),
-        soeg: (Array.isArray(v.soeg) ? v.soeg : [])
-          .map((s) => String(s).toLowerCase().trim())
-          .filter((s) => SOEG_VOCAB.some((vok) => matcherSoegeord(s, vok) || s === vok))
-          .slice(0, 3),
+        soeg: udledSoeg(String(v.navn)),
       }))
       .filter((v) => v.navn.length > 0 && v.pris > 0);
 
-    return svar({ varer }, 200);
+    // forventet_antal lader cloud-scriptet opdage under-tælling og køre siden igen.
+    return svar({ varer, forventet_antal: Number(parsed.forventet_antal) || varer.length }, 200);
   } catch (e) {
     return svar({ error: String((e as Error)?.message ?? e) }, 500);
   }

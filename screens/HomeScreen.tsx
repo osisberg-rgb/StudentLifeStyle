@@ -39,7 +39,9 @@ const AVIS_BASE = 'https://oqolcifpmdybimspnadc.supabase.co/storage/v1/object/pu
 const AVISER = [
   { butik: 'Netto', slug: 'netto' },
   { butik: 'Rema 1000', slug: 'rema1000' },
+  { butik: 'Bilka', slug: 'bilka' },
   { butik: 'Føtex', slug: 'fotex' },
+  { butik: 'SuperBrugsen', slug: 'superbrugsen' },
 ];
 
 type Props = { navigation: any };

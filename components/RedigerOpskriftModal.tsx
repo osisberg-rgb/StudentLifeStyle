@@ -12,7 +12,6 @@ import type { Opskrift, OpskriftIngrediens } from '../types/opskrift';
 // Kun suppe/salat/broed kan tagges manuelt — "aftensmad" er bare fraværet af
 // de tre (samme regel som vælgeren bruger), så den vises ikke som en knap.
 const TAG_VALG = KATEGORIER.filter(k => k.id !== 'aftensmad');
-const KOED_VALG = ['Oksekød', 'Kylling', 'Svinekød', 'Fisk', 'Vegetar', 'Alt'];
 
 type Props = {
   // Sat = rediger eksisterende. For en NY opskrift sendes et tomt skabelon-objekt
@@ -146,23 +145,6 @@ export default function RedigerOpskriftModal({ opskrift, erNy, onLuk, onGemt }: 
               placeholder="Fx Cremet kylling i karry"
               placeholderTextColor={Colors.inkSoft}
             />
-
-            {/* Kødtype */}
-            <Text style={styles.label}>Kødtype</Text>
-            <View style={styles.tagRække}>
-              {KOED_VALG.map(k => {
-                const aktiv = koed === k;
-                return (
-                  <TouchableOpacity
-                    key={k}
-                    style={[styles.tag, aktiv && styles.tagAktiv]}
-                    onPress={() => setKoed(k)}
-                  >
-                    <Text style={[styles.tagTekst, aktiv && styles.tagTekstAktiv]}>{k}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
 
             {/* Portioner + minutter */}
             <View style={styles.række}>
