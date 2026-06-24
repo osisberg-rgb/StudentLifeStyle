@@ -9,7 +9,10 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "dk.madugen.app"
+      "bundleIdentifier": "dk.madugen.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -35,7 +38,8 @@
           "photosPermission": "MadUgen bruger dine billeder til at importere opskrifter fra et screenshot eller foto.",
           "cameraPermission": "MadUgen bruger kameraet til at tage et billede af en opskrift."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "eas": {
