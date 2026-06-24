@@ -84,10 +84,19 @@ Deno.serve(async (req) => {
       "3. Udtræk så ét objekt pr. tilbud, til antallet matcher din optælling.\n\n" +
       "FOR HVERT TILBUD:\n" +
       "- navn: produktnavnet som det står (inkl. mærke hvis synligt).\n" +
-      "- pris: prisen i kr. som tal (fx 18 eller 12.95). Ved multibuy (\"3 for 20\"): " +
-      "pris = pris PR. STK = total ÷ antal (20/3 = 6.67), afrundet til 2 decimaler. " +
-      "Ved \"spar/%\": pris = den faktiske tilbudspris hvis den vises, ellers null.\n" +
-      "- tilbudstype: \"stk\" | \"multibuy\" | \"rabat\".\n" +
+      "- pris: den pris du FAKTISK betaler i kassen for den annoncerede vare, som " +
+      "tal (fx 18 eller 12.95). Følg reglerne i rækkefølge:\n" +
+      "  • En MÆNGDE-/pakkeangivelse — \"8 stk\", \"6-pak\", \"500 g\", \"4 ruller\", " +
+      "\"1 kg\", \"2 l\" — beskriver INDHOLDET i ÉN pakke. pris = den viste pris for " +
+      "pakken. DIVIDÉR ALDRIG med antallet/vægten (8 stk Sun Lolly til 16 kr → pris = 16, " +
+      "IKKE 2).\n" +
+      "  • Ægte multibuy, hvor man skal købe FLERE SEPARATE pakker for at få prisen " +
+      "(\"3 for 20\", \"2 for 25\"): pris = pris pr. stk = total ÷ antal (20/3 = 6.67), " +
+      "afrundet til 2 decimaler.\n" +
+      "  • Ved \"spar/%\": pris = den faktiske tilbudspris hvis den vises, ellers null.\n" +
+      "- tilbudstype: \"stk\" | \"multipak\" | \"multibuy\" | \"rabat\". Brug \"multipak\" " +
+      "når antallet er indholdet i én pakke (8 stk i én pose), og kun \"multibuy\" når " +
+      "man skal købe flere separate pakker.\n" +
       "- betingelse: betingelsesteksten ordret hvis relevant (\"3 for 20\", \"spar 30%\", " +
       "\"min. 2 stk\"), ellers \"\".\n\n" +
       "MEDTAG: alle madvarer + drikkevarer (kaffe, sodavand, øl, vin, is).\n" +
