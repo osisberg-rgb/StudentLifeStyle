@@ -120,7 +120,10 @@ export default function AlleTilbudModal({ synlig, butikker, ugeNr, onClose }: Pr
                   <View style={styles.kort}>
                     <View style={styles.kortMidt}>
                       <Text style={styles.varenavn} numberOfLines={2}>{item.navn}</Text>
-                      <ButiksPill name={item.butik} />
+                      <View style={styles.metaRække}>
+                        <ButiksPill name={item.butik} />
+                        {item.maengde ? <Text style={styles.maengde}>{item.maengde}</Text> : null}
+                      </View>
                     </View>
                     <Text style={styles.pris}>{item.pris},-</Text>
                     <KlokkeKnap label={item.navn} term={termFraTilbud(item.navn)} størrelse={20} />
@@ -185,6 +188,8 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.line, padding: 12, marginBottom: 8, gap: 12,
   },
   kortMidt: { flex: 1, gap: 5 },
+  metaRække: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  maengde: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: Colors.inkSoft },
   varenavn: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.ink, lineHeight: 19 },
   pris: { fontSize: 18, fontFamily: 'BricolageGrotesque_800ExtraBold', color: Colors.red, letterSpacing: -0.36 },
   tilføjKnap: {

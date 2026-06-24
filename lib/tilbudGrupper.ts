@@ -6,6 +6,7 @@ export type TilbudRække = {
   butik: string;
   uge: number;
   navn: string;
+  maengde?: string | null;
   soeg: string[] | null;
   pris: number;
 };
@@ -20,6 +21,7 @@ export function grupperTilbud(rækker: TilbudRække[]): TilbudsKilde[] {
     }
     perNøgle.get(nøgle)!.varer.push({
       navn: r.navn,
+      maengde: r.maengde ?? undefined,
       soeg: Array.isArray(r.soeg) ? r.soeg : [],
       pris: Number(r.pris),
     });

@@ -482,7 +482,10 @@ export default function HomeScreen({ navigation }: Props) {
                   <Text style={styles.tilbudNavn}>
                     {t.kilde === 'watch' ? '⭐ ' : t.kilde === 'favorit' ? '❤️ ' : ''}{t.navn}
                   </Text>
-                  <ButiksPill name={t.butik} />
+                  <View style={styles.tilbudMeta}>
+                    <ButiksPill name={t.butik} />
+                    {t.maengde ? <Text style={styles.tilbudMaengde}>{t.maengde}</Text> : null}
+                  </View>
                 </View>
                 <Text style={styles.tilbudspris}>{t.tilbudspris},-</Text>
                 <KlokkeKnap label={t.navn} term={termFraTilbud(t.navn)} størrelse={20} />
@@ -731,6 +734,8 @@ const styles = StyleSheet.create({
   avisLabel: { paddingVertical: 7, alignItems: 'center' },
   avisNavn: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   tilbudNavn: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.ink, marginBottom: 4 },
+  tilbudMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  tilbudMaengde: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: Colors.inkSoft },
   tilbudspris: { fontSize: 18, fontFamily: 'BricolageGrotesque_800ExtraBold', color: Colors.red, letterSpacing: -0.36 },
   tilbudPlus: {
     width: 36,

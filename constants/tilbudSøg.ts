@@ -12,6 +12,7 @@ import { kategoriserIngrediens, KATEGORI_ORDEN, KATEGORI_EMOJI } from './indkoeb
 export type TilbudsTræf = {
   butik: string;
   navn: string;   // pakkenavnet fra avisen (vises på kortet + som vare i listen)
+  maengde?: string; // pakkestørrelse, fx "500 g" / "8 stk" — hvor meget man får
   soeg: string[];
   pris: number;   // tilbudsprisen i kr
 };
@@ -57,7 +58,7 @@ export function søgTilbud(termer: string[], butikker?: string[], maks = 40): Ti
     for (const vare of kilde.varer) {
       const hø = [vare.navn.toLowerCase(), ...vare.soeg.map(s => s.toLowerCase())];
       if (aktive.some(t => rammer(t, hø))) {
-        ud.push({ butik: kilde.butik, navn: vare.navn, soeg: vare.soeg, pris: vare.pris });
+        ud.push({ butik: kilde.butik, navn: vare.navn, maengde: vare.maengde, soeg: vare.soeg, pris: vare.pris });
       }
     }
   }
@@ -72,7 +73,7 @@ export function alleTilbud(butikker?: string[], maks = 200): TilbudsTræf[] {
   const ud: TilbudsTræf[] = [];
   for (const kilde of aktiveTilbud(butikker)) {
     for (const vare of kilde.varer) {
-      ud.push({ butik: kilde.butik, navn: vare.navn, soeg: vare.soeg, pris: vare.pris });
+      ud.push({ butik: kilde.butik, navn: vare.navn, maengde: vare.maengde, soeg: vare.soeg, pris: vare.pris });
     }
   }
   return ud.sort((a, b) => a.pris - b.pris).slice(0, maks);
@@ -90,7 +91,7 @@ export function grupperTilbudIKategorier(butikker?: string[]): TilbudsGruppe[] {
       const kategori = kategoriserIngrediens({ navn: vare.navn, soeg: vare.soeg });
       if (!perKategori.has(kategori)) perKategori.set(kategori, []);
       perKategori.get(kategori)!.push({
-        butik: kilde.butik, navn: vare.navn, soeg: vare.soeg, pris: vare.pris,
+        butik: kilde.butik, navn: vare.navn, maengde: vare.maengde, soeg: vare.soeg, pris: vare.pris,
       });
     }
   }

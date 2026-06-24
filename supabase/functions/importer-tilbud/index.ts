@@ -82,8 +82,8 @@ function matcherSoegeord(tekst: string, soegeord: string): boolean {
   return t.includes(k.substring(0, k.length - 1));
 }
 
-type Vare = { navn: string; pris: number; soeg: string[] };
-type RaaVare = { navn: string; pris: number; tilbudstype?: string; betingelse?: string };
+type Vare = { navn: string; maengde: string; pris: number; soeg: string[] };
+type RaaVare = { navn: string; maengde?: string; pris: number; tilbudstype?: string; betingelse?: string };
 
 // Udled op til 3 soeg-ord fra varenavnet (mest specifikke ord først). soeg
 // kommer IKKE fra modellen længere — det stjæler fokus fra at finde ALLE varer.
@@ -115,6 +115,9 @@ Deno.serve(async (req) => {
       "3. Udtræk så ét objekt pr. tilbud, til antallet matcher din optælling.\n\n" +
       "FOR HVERT TILBUD:\n" +
       "- navn: produktnavnet som det står (inkl. mærke hvis synligt).\n" +
+      "- maengde: pakkestørrelsen/mængden brugeren får, som den står på flisen " +
+      "(fx \"500 g\", \"8 stk\", \"1 l\", \"6-pak\", \"1 kg\", \"4 ruller\"). Tom streng " +
+      "hvis intet mængde-mål er vist.\n" +
       "- pris: den pris du FAKTISK betaler i kassen for den annoncerede vare, som " +
       "tal (fx 18 eller 12.95). Følg reglerne i rækkefølge:\n" +
       "  • En MÆNGDE-/pakkeangivelse — \"8 stk\", \"6-pak\", \"500 g\", \"4 ruller\", " +
@@ -134,7 +137,7 @@ Deno.serve(async (req) => {
       "SPRING OVER: rene reklamer, opskrifter, konkurrencer, non-food (medmindre drikkevare).\n" +
       "Er du i tvivl om en flise er en vare → MEDTAG den hellere.\n\n" +
       "Returnér KUN JSON: " +
-      "{\"forventet_antal\":0,\"varer\":[{\"navn\":\"...\",\"pris\":0,\"tilbudstype\":\"stk\",\"betingelse\":\"\"}]}";
+      "{\"forventet_antal\":0,\"varer\":[{\"navn\":\"...\",\"maengde\":\"500 g\",\"pris\":0,\"tilbudstype\":\"stk\",\"betingelse\":\"\"}]}";
 
     const { media_type, data } = dataUrlTilKilde(billede);
     const res = await anthropic.messages.create({
@@ -162,6 +165,7 @@ Deno.serve(async (req) => {
       .filter((v) => v && typeof v.navn === "string" && Number.isFinite(Number(v.pris)))
       .map((v) => ({
         navn: String(v.navn).trim(),
+        maengde: String(v.maengde ?? "").trim(),
         pris: Number(v.pris),
         soeg: udledSoeg(String(v.navn)),
       }))

@@ -67,7 +67,7 @@ async function skrivTilbud(butik, uge, varer) {
     method: 'DELETE', headers: svcHead(),
   });
   if (varer.length === 0) return;
-  const rows = varer.map(v => ({ butik, uge, navn: v.navn, soeg: v.soeg ?? [], pris: v.pris }));
+  const rows = varer.map(v => ({ butik, uge, navn: v.navn, maengde: v.maengde ?? null, soeg: v.soeg ?? [], pris: v.pris }));
   for (let i = 0; i < rows.length; i += 500) {
     const r = await fetch(`${REST}/tilbud`, {
       method: 'POST',

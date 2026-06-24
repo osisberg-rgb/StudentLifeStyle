@@ -21,7 +21,7 @@ export async function synkroniserTilbud(force = false): Promise<boolean> {
   try {
     const { data, error } = await supabase
       .from('tilbud')
-      .select('butik, uge, navn, soeg, pris');
+      .select('butik, uge, navn, maengde, soeg, pris');
 
     // Fejl eller tom tabel → behold de hardkodede fallback-filer
     if (error || !data || data.length === 0) return false;

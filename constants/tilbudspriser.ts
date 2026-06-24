@@ -17,7 +17,7 @@ export type TilbudsKilde = {
   butik: string;
   // Enkelt tal (produktion) eller array (test/kampagner der løber flere uger)
   uge: number | number[];
-  varer: Array<{ navn: string; soeg: string[]; pris: number }>;
+  varer: Array<{ navn: string; soeg: string[]; pris: number; maengde?: string }>;
 };
 
 // De hardkodede filer er nu FALLBACK/seed. Den primære kilde er Supabase-
@@ -179,6 +179,7 @@ export type TilbudsVisning = {
   navn: string;
   soeg: string[];
   butik: string;
+  maengde?: string;                            // pakkestørrelse, fx "500 g" / "8 stk"
   normalpris: number;
   tilbudspris: number;
   besparelse: number;
@@ -197,6 +198,7 @@ export function bedsteTilbud(maks = 3, butikker?: string[]): TilbudsVisning[] {
         navn: vare.navn,
         soeg: vare.soeg,
         butik: kilde.butik,
+        maengde: vare.maengde,
         normalpris: basis,
         tilbudspris: vare.pris,
         besparelse: basis - vare.pris,
@@ -239,7 +241,7 @@ export function tilbudTilDig(
       // slags vare i flere butikker samles, og vi beholder den BILLIGSTE.
       const nøgle = (watchTerm ?? vare.soeg[0] ?? vare.navn).toLowerCase();
       const ny: TilbudsVisning = {
-        navn: vare.navn, soeg: vare.soeg, butik: kilde.butik,
+        navn: vare.navn, soeg: vare.soeg, butik: kilde.butik, maengde: vare.maengde,
         normalpris: basis ?? vare.pris, tilbudspris: vare.pris,
         besparelse: basis != null ? Math.max(0, basis - vare.pris) : 0,
         kilde: watchTerm ? 'watch' : 'favorit',
