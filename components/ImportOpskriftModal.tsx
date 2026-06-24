@@ -29,8 +29,6 @@ type Props = {
   metode?: 'kamera' | 'galleri' | 'link' | null;
 };
 
-const KOED_VALG = ['Oksekød', 'Kylling', 'Svinekød', 'Fisk', 'Vegetar', 'Alt'];
-
 type Importeret = {
   navn: string;
   koed: string;
@@ -333,19 +331,6 @@ export default function ImportOpskriftModal({ synlig, butikker, onLuk, onGemt, o
                 placeholderTextColor={Colors.inkSoft}
               />
 
-              <Text style={styles.label}>Kødtype</Text>
-              <View style={styles.chips}>
-                {KOED_VALG.map(k => (
-                  <TouchableOpacity
-                    key={k}
-                    style={[styles.chip, data.koed === k && styles.chipAktiv]}
-                    onPress={() => setData(d => d ? { ...d, koed: k } : d)}
-                  >
-                    <Text style={[styles.chipTekst, data.koed === k && styles.chipTekstAktiv]}>{k}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
               <Text style={styles.label}>Portioner</Text>
               <View style={styles.stepper}>
                 <TouchableOpacity
@@ -488,14 +473,6 @@ const styles = StyleSheet.create({
     fontSize: 12, fontFamily: 'BricolageGrotesque_700Bold', color: Colors.inkSoft,
     letterSpacing: 0.4, textTransform: 'uppercase', marginTop: 16, marginBottom: 8,
   },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8,
-    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.line,
-  },
-  chipAktiv: { backgroundColor: Colors.green, borderColor: Colors.green },
-  chipTekst: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: Colors.inkSoft },
-  chipTekstAktiv: { color: '#fff' },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   stepKnap: {
     width: 34, height: 34, borderRadius: 17,
