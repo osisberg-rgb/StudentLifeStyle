@@ -42,6 +42,9 @@ const AVISER = [
   { butik: 'Bilka', slug: 'bilka' },
   { butik: 'Føtex', slug: 'fotex' },
   { butik: 'SuperBrugsen', slug: 'superbrugsen' },
+  { butik: 'Lidl', slug: 'lidl' },
+  { butik: 'Meny', slug: 'meny' },
+  { butik: '365discount', slug: '365discount' },
 ];
 
 type Props = { navigation: any };

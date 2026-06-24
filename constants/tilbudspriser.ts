@@ -9,6 +9,9 @@ import { NETTO_TILBUD } from './tilbud/netto';
 import { FOTEX_TILBUD } from './tilbud/fotex';
 import { SUPERBRUGSEN_TILBUD } from './tilbud/superbrugsen';
 import { BILKA_TILBUD } from './tilbud/bilka';
+import { LIDL_TILBUD } from './tilbud/lidl';
+import { MENY_TILBUD } from './tilbud/meny';
+import { DISCOUNT365_TILBUD } from './tilbud/365discount';
 
 export type TilbudsKilde = {
   butik: string;
@@ -27,6 +30,9 @@ const TILBUDSKILDER: TilbudsKilde[] = [
   FOTEX_TILBUD,
   SUPERBRUGSEN_TILBUD,
   BILKA_TILBUD,
+  LIDL_TILBUD,
+  MENY_TILBUD,
+  DISCOUNT365_TILBUD,
 ];
 
 // Fjernkilde (Supabase) overskriver de hardkodede filer, når den er sat med

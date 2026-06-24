@@ -4,7 +4,9 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from './supabase';
 
-export type ButikValg = 'Netto' | 'Rema 1000' | 'Føtex' | 'SuperBrugsen' | 'Bilka';
+export type ButikValg =
+  | 'Netto' | 'Rema 1000' | 'Føtex' | 'SuperBrugsen' | 'Bilka'
+  | 'Lidl' | 'Meny' | '365discount';
 
 // slug bruges i Storage-filnavne og MÅ matche de eksisterende (netto/rema1000/fotex).
 export const BUTIK_SLUG: Record<ButikValg, string> = {
@@ -13,9 +15,14 @@ export const BUTIK_SLUG: Record<ButikValg, string> = {
   'Føtex': 'fotex',
   'SuperBrugsen': 'superbrugsen',
   'Bilka': 'bilka',
+  'Lidl': 'lidl',
+  'Meny': 'meny',
+  '365discount': '365discount',
 };
 
-export const ALLE_BUTIK_VALG: ButikValg[] = ['Netto', 'Rema 1000', 'Føtex', 'SuperBrugsen', 'Bilka'];
+export const ALLE_BUTIK_VALG: ButikValg[] = [
+  'Netto', 'Rema 1000', 'Føtex', 'SuperBrugsen', 'Bilka', 'Lidl', 'Meny', '365discount',
+];
 
 export type UploadFil = { uri: string; navn: string; butik: ButikValg };
 
@@ -37,6 +44,9 @@ export function gætButik(filnavn: string): ButikValg {
   if (n.includes('føtex') || n.includes('fotex')) return 'Føtex';
   if (n.includes('brugsen')) return 'SuperBrugsen';
   if (n.includes('bilka')) return 'Bilka';
+  if (n.includes('lidl')) return 'Lidl';
+  if (n.includes('meny')) return 'Meny';
+  if (n.includes('365') || n.includes('discount')) return '365discount';
   return 'Netto';
 }
 

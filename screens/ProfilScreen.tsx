@@ -18,7 +18,7 @@ import { harTilladelse, registrérForPush, afmeldPush } from '../lib/notifikatio
 import { erAdmin } from '../lib/admin';
 import UploadTilbudModal from '../components/UploadTilbudModal';
 
-const ALLE_BUTIKKER = ['Netto', 'Rema 1000', 'Føtex', 'SuperBrugsen', 'Bilka'];
+const ALLE_BUTIKKER = ['Netto', 'Rema 1000', 'Føtex', 'SuperBrugsen', 'Bilka', 'Lidl', 'Meny', '365discount'];
 
 export default function ProfilScreen() {
   const { user, session, signOut } = useAuth();

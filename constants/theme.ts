@@ -36,6 +36,7 @@ export const StoreColors: Record<string, { bg: string; text: string }> = {
   Lidl:      { bg: '#0050AA', text: '#FFFFFF' },
   Føtex:     { bg: '#005EB8', text: '#FFFFFF' },
   Bilka:     { bg: '#1452CC', text: '#FFFFFF' },
+  Meny:      { bg: '#A6093D', text: '#FFFFFF' },
   Aldi:        { bg: '#001E78', text: '#FFFFFF' },
   Coop:        { bg: '#E2231A', text: '#FFFFFF' },
   '365discount': { bg: '#E23A2E', text: '#FFFFFF' },
