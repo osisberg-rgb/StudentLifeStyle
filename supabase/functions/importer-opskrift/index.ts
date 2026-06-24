@@ -110,16 +110,20 @@ type RaaOpskrift = {
   tid?: string;
 };
 
-async function hentHtml(url: string): Promise<string> {
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+// Instagram/Facebook serverer kun og:tags (med caption) til crawler-agenter.
+const CRAWLER_UA =
+  "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)";
+
+async function hentHtml(url: string, ua = BROWSER_UA): Promise<string> {
   // Timeout, så en langsom/hængende side ikke binder funktionen i minuttervis.
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 20000);
   try {
     const res = await fetch(url, {
       headers: {
-        // Nogle sider afviser ikke-browser-agenter
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "User-Agent": ua, // nogle sider afviser ikke-browser-agenter
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "da,en;q=0.8",
       },
@@ -136,6 +140,48 @@ async function hentHtml(url: string): Promise<string> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+// ── Social-medie-captions (TikTok / Instagram) ───────────────────────────
+// Opskriften står oftest i video-BESKRIVELSEN, ikke i videoen. Vi henter
+// caption-teksten (uden login) og kører den gennem samme normalisering.
+type SocialCaption = { caption: string; billede: string | null; forfatter: string | null };
+
+function erTikTok(vært: string): boolean { return /(^|\.)tiktok\.com$/i.test(vært); }
+function erInstagram(vært: string): boolean { return /(^|\.)instagram\.com$/i.test(vært); }
+
+// TikTok: oEmbed-API'et returnerer hele captionen i `title` + en thumbnail.
+async function hentTikTokCaption(url: string): Promise<SocialCaption> {
+  const oembed = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`;
+  try {
+    const res = await fetch(oembed, { headers: { "User-Agent": BROWSER_UA } });
+    if (!res.ok) return { caption: "", billede: null, forfatter: null };
+    const j = await res.json();
+    return {
+      caption: dekodEntiteter(String(j.title ?? "")).trim(),
+      billede: typeof j.thumbnail_url === "string" ? j.thumbnail_url : null,
+      forfatter: typeof j.author_name === "string" ? j.author_name : null,
+    };
+  } catch {
+    return { caption: "", billede: null, forfatter: null };
+  }
+}
+
+// Instagram: hele captionen ligger i og:description, men kun for en crawler-UA.
+// Formatet er "N likes, M comments - bruger on dato: \"<caption>\"".
+async function hentInstagramCaption(url: string): Promise<SocialCaption> {
+  const html = await hentHtml(url, CRAWLER_UA);
+  let desc = udtrækMeta(html, "og:description") ?? ""; // udtrækMeta afkoder entiteter
+  let forfatter: string | null = null;
+  const præfiks = desc.match(
+    /^\s*[\d.,kmKM]+\s+likes?,\s*[\d.,kmKM]+\s+comments?\s+-\s+(.+?)\s+on\s+[^:]+:\s*/i,
+  );
+  if (præfiks) {
+    forfatter = præfiks[1].trim();
+    desc = desc.slice(præfiks[0].length);
+  }
+  desc = desc.replace(/^"([\s\S]*)"\.?\s*$/, "$1").trim(); // ydre anførselstegn
+  return { caption: desc, billede: udtrækMeta(html, "og:image") ?? null, forfatter };
 }
 
 // Afkod HTML-entiteter (&aelig; → æ, &#229; → å, &frac12; → ½) så æøå og
@@ -393,6 +439,7 @@ Deno.serve(async (req) => {
     let opskrift: Record<string, unknown>;
     let jsonLdBillede: string | null = null;
     let kildeType: string;
+    let kildeNavn = harBillede ? "Eget billede" : domæne(url);
 
     if (harBillede) {
       // ── Billede-flow: læs opskriften direkte fra et foto/screenshot ──
@@ -421,31 +468,54 @@ Deno.serve(async (req) => {
       });
       opskrift = parseJson(udtrækTekst(svar));
     } else {
-      // ── Link-flow: hent siden, parse JSON-LD → microdata → tekst ──
-      const html = await hentHtml(url);
-      const jsonLd = udtrækJsonLd(html);
-      // Foretræk JSON-LD; ellers prøv microdata (fx valdemarsro) før rå tekst.
-      const struktur =
-        jsonLd && jsonLd.ingredienser.length > 0 ? jsonLd : udtrækMicrodata(html);
-      jsonLdBillede = struktur?.billede ?? udtrækMeta(html, "og:image") ?? null;
-      kildeType = struktur
-        ? (jsonLd && jsonLd.ingredienser.length > 0 ? "json-ld" : "microdata")
-        : "tekst";
-
+      // ── Link-flow ──
+      const vært = domæne(url);
       let raaTekst: string;
-      if (struktur && struktur.ingredienser.length > 0) {
-        // Afkod entiteter på alle felter, så æøå/½ er korrekte i modellens input.
-        const navn = dekodEntiteter(struktur.navn ?? udtrækMeta(html, "og:title") ?? "");
+
+      if (erTikTok(vært) || erInstagram(vært)) {
+        // ── Social-medie: opskriften står i video-beskrivelsen, ikke videoen ──
+        kildeType = erTikTok(vært) ? "tiktok" : "instagram";
+        const social = erTikTok(vært)
+          ? await hentTikTokCaption(url)
+          : await hentInstagramCaption(url);
+        jsonLdBillede = social.billede;
+        if (social.forfatter) kildeNavn = social.forfatter;
+        if (social.caption.trim().length < 15) {
+          return json({
+            error:
+              "Kunne ikke finde en opskrift i beskrivelsen. Står opskriften i " +
+              "billedteksten/beskrivelsen til opslaget?",
+          }, 422);
+        }
         raaTekst =
-          `NAVN: ${navn}\n` +
-          `PORTIONER (yield): ${dekodEntiteter(struktur.portioner ?? "")}\n` +
-          `TID (minutter): ${isoTilMinutter(struktur.tid) ?? ""}\n\n` +
-          `INGREDIENSER:\n${struktur.ingredienser.map(i => `- ${dekodEntiteter(i)}`).join("\n")}\n\n` +
-          `FREMGANGSMÅDE:\n${struktur.fremgangsmaade.map((t, i) => `${i + 1}. ${dekodEntiteter(t)}`).join("\n")}`;
+          `Dette er BESKRIVELSEN fra et ${kildeType}-opslag. Find opskriften i ` +
+          `teksten og ignorér intro-snak, emojis og hashtags:\n\n${social.caption}`;
       } else {
-        raaTekst =
-          `Siden har ikke struktureret opskrift-data. Find opskriften i denne ` +
-          `sidetekst og udtræk navn, ingredienser og fremgangsmåde:\n\n${renTekst(html)}`;
+        // ── Normal opskriftsside: JSON-LD → microdata → tekst ──
+        const html = await hentHtml(url);
+        const jsonLd = udtrækJsonLd(html);
+        // Foretræk JSON-LD; ellers prøv microdata (fx valdemarsro) før rå tekst.
+        const struktur =
+          jsonLd && jsonLd.ingredienser.length > 0 ? jsonLd : udtrækMicrodata(html);
+        jsonLdBillede = struktur?.billede ?? udtrækMeta(html, "og:image") ?? null;
+        kildeType = struktur
+          ? (jsonLd && jsonLd.ingredienser.length > 0 ? "json-ld" : "microdata")
+          : "tekst";
+
+        if (struktur && struktur.ingredienser.length > 0) {
+          // Afkod entiteter på alle felter, så æøå/½ er korrekte i modellens input.
+          const navn = dekodEntiteter(struktur.navn ?? udtrækMeta(html, "og:title") ?? "");
+          raaTekst =
+            `NAVN: ${navn}\n` +
+            `PORTIONER (yield): ${dekodEntiteter(struktur.portioner ?? "")}\n` +
+            `TID (minutter): ${isoTilMinutter(struktur.tid) ?? ""}\n\n` +
+            `INGREDIENSER:\n${struktur.ingredienser.map(i => `- ${dekodEntiteter(i)}`).join("\n")}\n\n` +
+            `FREMGANGSMÅDE:\n${struktur.fremgangsmaade.map((t, i) => `${i + 1}. ${dekodEntiteter(t)}`).join("\n")}`;
+        } else {
+          raaTekst =
+            `Siden har ikke struktureret opskrift-data. Find opskriften i denne ` +
+            `sidetekst og udtræk navn, ingredienser og fremgangsmåde:\n\n${renTekst(html)}`;
+        }
       }
 
       const svar = await anthropic.messages.create({
@@ -477,7 +547,7 @@ Deno.serve(async (req) => {
       ingredienser,
       billede_url: jsonLdBillede,
       kilde_url: harBillede ? null : url,
-      kilde_navn: harBillede ? "Eget billede" : domæne(url),
+      kilde_navn: kildeNavn,
       // Diagnostik til preview-skærmen
       _kilde: kildeType,
       _lav_sikkerhed_antal: lavSikkerhed,
