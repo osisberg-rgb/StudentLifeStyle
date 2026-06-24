@@ -37,7 +37,7 @@ import { findOpskrift } from '../lib/brugerOpskrifter';
 import type { Madplan } from '../types/madplan';
 
 // Samme butiksliste som ProfilScreen — onboardingens svar genfindes/ændres dér
-const BUTIKKER = ['Netto', 'Rema 1000', 'Føtex', 'SuperBrugsen', 'Bilka', 'Lidl', 'Meny', '365discount'];
+const BUTIKKER = ['Netto', 'Rema 1000', 'Føtex', 'SuperBrugsen', 'Bilka', 'Lidl', 'Meny', '365discount', 'Kvikly'];
 
 const KOED_EMOJI: Record<string, string> = {
   Kylling: '🐔', Oksekød: '🥩', Svinekød: '🐷', Alt: '🍽️',

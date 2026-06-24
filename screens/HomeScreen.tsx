@@ -45,6 +45,8 @@ const AVISER = [
   { butik: 'Lidl', slug: 'lidl' },
   { butik: 'Meny', slug: 'meny' },
   { butik: '365discount', slug: '365discount' },
+  // Kvikly deler avis med SuperBrugsen (Coop) → samme PDF, ingen egen upload.
+  { butik: 'Kvikly', slug: 'superbrugsen' },
 ];
 
 type Props = { navigation: any };

@@ -86,6 +86,21 @@ function matcherUge(k: TilbudsKilde, uge: number): boolean {
   return Array.isArray(k.uge) ? k.uge.includes(uge) : k.uge === uge;
 }
 
+// Butikker der deler tilbudsavis (samme kæde). Vælger man fx Kvikly, får man
+// også SuperBrugsens tilbud — de udgiver samme Coop-avis, og admin uploader
+// kun under SuperBrugsen.
+const BUTIK_ALIAS: Record<string, string[]> = {
+  Kvikly: ['SuperBrugsen'],
+};
+function udvidMedAlias(butikker: string[]): Set<string> {
+  const ud = new Set<string>();
+  for (const b of butikker) {
+    ud.add(b);
+    for (const a of (BUTIK_ALIAS[b] ?? [])) ud.add(a);
+  }
+  return ud;
+}
+
 let tilbudCache: { uge: number; kilder: TilbudsKilde[] } | null = null;
 export function aktiveTilbud(butikker?: string[]): TilbudsKilde[] {
   const uge = aktuelUge();
@@ -93,7 +108,8 @@ export function aktiveTilbud(butikker?: string[]): TilbudsKilde[] {
     tilbudCache = { uge, kilder: alleKilder().filter(k => matcherUge(k, uge)) };
   }
   if (!butikker || butikker.length === 0) return tilbudCache.kilder;
-  return tilbudCache.kilder.filter(k => butikker.includes(k.butik));
+  const valgte = udvidMedAlias(butikker);
+  return tilbudCache.kilder.filter(k => valgte.has(k.butik));
 }
 
 // Tilbud prissat PR. ENHED (fx "Laksefilet pr. 100g", "Okseculotte pr. 1/2 kg",
