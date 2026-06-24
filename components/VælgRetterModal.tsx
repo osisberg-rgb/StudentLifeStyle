@@ -121,7 +121,21 @@ export default function VælgRetterModal({ synlig, butikker, personer, forvalgte
       || (o.ingredienser ?? []).some((i: any) => (i.navn ?? '').toLowerCase().includes(søgQ));
     return matcherKategori && matcherSøg;
   });
-  const viste = filtrerede;
+
+  // Sortering:
+  //  - Inde i en RIGTIG kogebog: bevar den rækkefølge opskrifterne blev lagt
+  //    ind (opskrifterIKogebog er indsætnings-sorteret, se hentMedlemskaber).
+  //  - Ellers (alle/normale kategorier, favoritter, mine): FLEST TILBUD FØRST.
+  let viste: typeof filtrerede;
+  if (kategori === 'kogeboeger' && erRigtigKogebog(valgtKogebog)) {
+    const orden = opskrifterIKogebog(valgtKogebog);
+    viste = [...filtrerede].sort((a, b) => orden.indexOf(a.id) - orden.indexOf(b.id));
+  } else {
+    // Forudberegn tilbuds-antal pr. opskrift (cachet motor) og sortér faldende.
+    // JS-sort er stabil, så lige mange tilbud beholder grundrækkefølgen.
+    const antalTilbud = new Map(filtrerede.map(o => [o.id, tælTilbudsMatch(o.id, butikker).antal]));
+    viste = [...filtrerede].sort((a, b) => (antalTilbud.get(b.id) ?? 0) - (antalTilbud.get(a.id) ?? 0));
+  }
 
   // Komponenten er permanent monteret i PlanerScreen og kører ved hvert
   // re-render dér — uden denne guard bygges hele grid'et med alle

@@ -65,7 +65,10 @@ export async function hentMedlemskaber(): Promise<void> {
   try {
     const { data, error } = await supabase
       .from('kogebog_medlemskab')
-      .select('opskrift_id, kogebog_id');
+      .select('opskrift_id, kogebog_id')
+      // Indsætnings-rækkefølge: så opskrifterIKogebog() (og dermed kogebogs-
+      // grid'et) viser opskrifterne i den rækkefølge de blev lagt ind.
+      .order('created_at', { ascending: true });
     if (error || !data) return;
     medlemskab = new Map(data.map(r => [r.opskrift_id as string, r.kogebog_id as string]));
     version++;
