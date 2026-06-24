@@ -9,7 +9,7 @@
 //   1. fetch(url) → HTML
 //   2. JSON-LD (schema.org/Recipe) → rå navn/ingredienser/instruktioner/billede
 //      (falder tilbage på ren sidetekst hvis siden ikke har JSON-LD)
-//   3. gpt-4o-mini normaliserer til vores skema — vigtigst: et `soeg`-array
+//   3. Claude (haiku) normaliserer til vores skema — vigtigst: et `soeg`-array
 //      pr. ingrediens fra vores faste ordforråd, så prismotoren rammer varen
 //   4. deterministisk validering: hver ikke-estimeret ingrediens tjekkes mod
 //      basispris-ordforrådet og markeres `lav_sikkerhed` hvis intet match
@@ -19,12 +19,44 @@
 //     -H "Authorization: Bearer $ANON_KEY" -H "Content-Type: application/json" \
 //     -d '{"url":"https://www.valdemarsro.dk/spaghetti-bolognese/"}'
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import OpenAI from "https://deno.land/x/openai@v4.52.7/mod.ts";
+import Anthropic from "npm:@anthropic-ai/sdk";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Claude-model til opskrift-import (billig, skalerer med antal brugere).
+const CLAUDE_MODEL = "claude-haiku-4-5";
+
+// En data-URL (data:image/jpeg;base64,XXXX) → Anthropics billed-kilde-format.
+function dataUrlTilKilde(dataUrl: string): { media_type: string; data: string } {
+  const m = dataUrl.match(/^data:([^;]+);base64,(.*)$/s);
+  if (!m) throw new Error("Ugyldigt billede (forventede en base64 data-URL)");
+  return { media_type: m[1], data: m[2] };
+}
+
+// Træk teksten ud af et Anthropic-svar (content er en liste af blokke).
+function udtrækTekst(resp: { content?: Array<{ type: string; text?: string }> }): string {
+  return resp.content?.find((b) => b.type === "text")?.text ?? "";
+}
+
+// Claude har ikke OpenAIs json_object-tilstand. Prompten beder om ren JSON,
+// men vi parser defensivt: strip evt. ```json-hegn og fald tilbage på at
+// klippe fra første { til sidste }.
+function parseJson(tekst: string): Record<string, unknown> {
+  let t = (tekst ?? "").trim();
+  if (t.startsWith("```")) {
+    t = t.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  }
+  try { return JSON.parse(t); } catch { /* prøv at udklippe nedenfor */ }
+  const start = t.indexOf("{");
+  const slut = t.lastIndexOf("}");
+  if (start >= 0 && slut > start) {
+    try { return JSON.parse(t.slice(start, slut + 1)); } catch { /* opgiv */ }
+  }
+  return {};
+}
 
 // ── Ordforråd ────────────────────────────────────────────────────────────
 // Søgeordene der HAR en basispris i appen (constants/basispriser.ts). Et
@@ -272,7 +304,7 @@ Deno.serve(async (req) => {
       return json({ error: "Send et gyldigt http(s)-link i 'url' eller et billede i 'billede'." }, 400);
     }
 
-    const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY")! });
+    const anthropic = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY")! });
     const ordliste = `ORDLISTE (vælg soeg-ord herfra):\n${SOEG_VOCAB.join(", ")}\n\n`;
 
     let opskrift: Record<string, unknown>;
@@ -283,13 +315,12 @@ Deno.serve(async (req) => {
       // ── Billede-flow: læs opskriften direkte fra et foto/screenshot ──
       // `billede` er en data-URL (data:image/...;base64,XXXX)
       kildeType = "billede";
-      const svar = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        temperature: 0.1,
-        response_format: { type: "json_object" },
+      const { media_type, data } = dataUrlTilKilde(billede);
+      const svar = await anthropic.messages.create({
+        model: CLAUDE_MODEL,
         max_tokens: 4000,
+        system: SYSTEM_PROMPT,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
           {
             role: "user",
             content: [
@@ -300,12 +331,12 @@ Deno.serve(async (req) => {
                   "udtræk navn, ingredienser og fremgangsmåde. Er noget ulæseligt, " +
                   "så udelad det frem for at gætte.",
               },
-              { type: "image_url", image_url: { url: billede } },
+              { type: "image", source: { type: "base64", media_type, data } },
             ],
           },
         ],
       });
-      opskrift = JSON.parse(svar.choices[0].message.content ?? "{}");
+      opskrift = parseJson(udtrækTekst(svar));
     } else {
       // ── Link-flow: hent siden, parse JSON-LD/tekst, normalisér ──
       const html = await hentHtml(url);
@@ -327,17 +358,15 @@ Deno.serve(async (req) => {
           `sidetekst og udtræk navn, ingredienser og fremgangsmåde:\n\n${renTekst(html)}`;
       }
 
-      const svar = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        temperature: 0.1,
-        response_format: { type: "json_object" },
+      const svar = await anthropic.messages.create({
+        model: CLAUDE_MODEL,
         max_tokens: 4000,
+        system: SYSTEM_PROMPT,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: ordliste + `RÅ OPSKRIFT:\n${raaTekst}` },
         ],
       });
-      opskrift = JSON.parse(svar.choices[0].message.content ?? "{}");
+      opskrift = parseJson(udtrækTekst(svar));
     }
 
     // Deterministisk validering: markér ingredienser vi ikke kan prissætte,
