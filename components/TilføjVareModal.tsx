@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Modal, View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, SafeAreaView, FlatList,
@@ -21,6 +21,16 @@ export default function TilføjVareModal({ synlig, butikker, onTilføj, onTilfø
   const [visAlle, setVisAlle] = useState(false);
   // Lige tilføjede varer (navn|butik) — så kortet kort viser "Tilføjet ✓"
   const [tilføjede, setTilføjede] = useState<Set<string>>(new Set());
+
+  // Start altid på "Alle", når arket åbnes — så brugeren straks ser ugens
+  // tilbud fra sine butikker uden at skulle vælge en kategori først.
+  useEffect(() => {
+    if (synlig) {
+      setVisAlle(true);
+      setAktivKat(null);
+      setQuery('');
+    }
+  }, [synlig]);
 
   const resultater = useMemo(() => {
     const fritekst = query.trim();

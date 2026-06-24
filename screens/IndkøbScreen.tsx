@@ -24,6 +24,8 @@ export default function IndkøbScreen() {
   // madplan og indkøbsliste altid peger på samme uge
   const [uge, setUge] = useState(() => hentValgtUge(getWeekNumber()));
   const [tilføjÅben, setTilføjÅben] = useState(false);
+  // Brugerens valgte butikker — "+ Tilføj vare" viser kun tilbud herfra.
+  const [butikker, setButikker] = useState<string[]>([]);
   // Planen som den blev hentet — genbruges ved gem, så hvert checkbox-tryk
   // ikke koster et ekstra SELECT-rundtrip. Genindlæses ved hvert fokus.
   const planRef = useRef<any>(null);
@@ -41,7 +43,13 @@ export default function IndkøbScreen() {
     }
     hentListe(uge);
     hentWatchlist();   // så 🔔-knapperne viser korrekt tilstand
+    hentButikker();    // brugerens valgte butikker → filtrér "+ Tilføj vare"
   }, [uge]));
+
+  async function hentButikker() {
+    const { data } = await supabase.from('profiles').select('stores').maybeSingle();
+    setButikker(Array.isArray(data?.stores) ? data!.stores : []);
+  }
 
   function skiftUge(retning: number) {
     const ny = uge + retning;
@@ -161,6 +169,7 @@ export default function IndkøbScreen() {
         </TouchableOpacity>
         <TilføjVareModal
           synlig={tilføjÅben}
+          butikker={butikker}
           onTilføj={tilføjVare}
           onTilføjFri={tilføjFriVare}
           onClose={() => setTilføjÅben(false)}
@@ -259,6 +268,7 @@ export default function IndkøbScreen() {
       </TouchableOpacity>
       <TilføjVareModal
         synlig={tilføjÅben}
+        butikker={butikker}
         onTilføj={tilføjVare}
         onTilføjFri={tilføjFriVare}
         onClose={() => setTilføjÅben(false)}
