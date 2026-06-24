@@ -111,18 +111,53 @@ type RaaOpskrift = {
 };
 
 async function hentHtml(url: string): Promise<string> {
-  const res = await fetch(url, {
-    headers: {
-      // Nogle sider afviser ikke-browser-agenter
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "da,en;q=0.8",
-    },
-    redirect: "follow",
-  });
-  if (!res.ok) throw new Error(`Kunne ikke hente siden (HTTP ${res.status})`);
-  return await res.text();
+  // Timeout, så en langsom/hængende side ikke binder funktionen i minuttervis.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 20000);
+  try {
+    const res = await fetch(url, {
+      headers: {
+        // Nogle sider afviser ikke-browser-agenter
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "da,en;q=0.8",
+      },
+      redirect: "follow",
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw new Error(`Kunne ikke hente siden (HTTP ${res.status})`);
+    return await res.text();
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error("Siden svarede ikke i tide (timeout).");
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Afkod HTML-entiteter (&aelig; → æ, &#229; → å, &frac12; → ½) så æøå og
+// brøk-/grad-tegn i ingredienser bliver korrekte før de sendes til modellen.
+const NAVNGIVNE_ENTITETER: Record<string, string> = {
+  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+  aelig: "æ", oslash: "ø", aring: "å", AElig: "Æ", Oslash: "Ø", Aring: "Å",
+  eacute: "é", Eacute: "É", auml: "ä", ouml: "ö", uuml: "ü",
+  deg: "°", frac12: "½", frac14: "¼", frac34: "¾", times: "×",
+  ndash: "–", mdash: "—", hellip: "…", rsquo: "’", lsquo: "‘",
+  ldquo: "“", rdquo: "”", middot: "·",
+};
+function dekodEntiteter(s: string): string {
+  if (!s) return s;
+  return s
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => {
+      try { return String.fromCodePoint(parseInt(h, 16)); } catch { return _; }
+    })
+    .replace(/&#(\d+);/g, (_, d) => {
+      try { return String.fromCodePoint(parseInt(d, 10)); } catch { return _; }
+    })
+    .replace(/&([a-zA-Z]+);/g, (m, n) => NAVNGIVNE_ENTITETER[n] ?? m);
 }
 
 // Fladgør et felt der kan være streng | streng[] | {text}[] | {url} osv.
@@ -196,6 +231,51 @@ function udtrækJsonLd(html: string): RaaOpskrift | null {
   return null;
 }
 
+// ── Microdata (schema.org/Recipe via itemprop) ───────────────────────────
+// Mange danske sider (fx valdemarsro) har IKKE JSON-LD Recipe, men markerer
+// opskriften med microdata. Vi trækker felterne ud så modellen får en ren
+// ingrediensliste i stedet for 12.000 tegn rå sidetekst med nav/reklamer.
+function alleItemprop(html: string, prop: string): string[] {
+  const re = new RegExp(`itemprop=["']${prop}["'][^>]*>([\\s\\S]*?)<\\/`, "gi");
+  const ud: string[] = [];
+  for (const m of html.matchAll(re)) {
+    const tekst = dekodEntiteter(
+      m[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(),
+    );
+    if (tekst) ud.push(tekst);
+  }
+  return ud;
+}
+
+// content-attribut (fx itemprop="totalTime" content="PT35M") ellers inder-tekst
+function førsteItempropContent(html: string, prop: string): string | undefined {
+  const c = html.match(
+    new RegExp(`itemprop=["']${prop}["'][^>]*\\bcontent=["']([^"']+)["']`, "i"),
+  );
+  if (c) return dekodEntiteter(c[1]);
+  const t = alleItemprop(html, prop);
+  return t.length ? t[0] : undefined;
+}
+
+function udtrækMicrodata(html: string): RaaOpskrift | null {
+  if (!/itemtype=["'][^"']*schema\.org\/Recipe/i.test(html)) return null;
+  const ingredienser = [
+    ...alleItemprop(html, "recipeIngredient"),
+    ...alleItemprop(html, "ingredients"), // ældre schema-navn
+  ];
+  if (ingredienser.length === 0) return null;
+  return {
+    // navn udelades bevidst: et uscoped itemprop="name" kan ramme logo/brødkrumme.
+    // Flowet bruger det mere pålidelige og:title for microdata-sider.
+    navn: undefined,
+    billede: undefined, // billedet hentes via og:image i flowet
+    ingredienser,
+    fremgangsmaade: alleItemprop(html, "recipeInstructions"),
+    portioner: førsteItempropContent(html, "recipeYield"),
+    tid: førsteItempropContent(html, "totalTime"),
+  };
+}
+
 // OpenGraph-billede/titel — findes på stort set alle opskriftssider og
 // redder billedet selv når opskriften ligger i microdata (fx valdemarsro)
 // eller kun i sidetekst, hvor JSON-LD-stien ikke fanger det.
@@ -209,19 +289,22 @@ function udtrækMeta(html: string, property: string): string | undefined {
       `<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["']${property}["']`,
       "i",
     ));
-  return m ? m[1] : undefined;
+  return m ? dekodEntiteter(m[1]) : undefined;
 }
 
-// Fallback: strip HTML til ren tekst når siden ikke har JSON-LD
+// Fallback: strip HTML til ren tekst når siden hverken har JSON-LD el. microdata.
+// Fjerner nav/header/footer/aside/form/svg-støj først, så modellen ikke drukner
+// i menupunkter og cookie-bannere, og afkoder entiteter (æøå korrekt).
 function renTekst(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 12000);
+  return dekodEntiteter(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<(nav|header|footer|aside|form|svg)\b[\s\S]*?<\/\1>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  ).slice(0, 16000);
 }
 
 // ISO 8601-varighed (PT1H10M) → minutter, til at fodre LLM'en
@@ -338,20 +421,27 @@ Deno.serve(async (req) => {
       });
       opskrift = parseJson(udtrækTekst(svar));
     } else {
-      // ── Link-flow: hent siden, parse JSON-LD/tekst, normalisér ──
+      // ── Link-flow: hent siden, parse JSON-LD → microdata → tekst ──
       const html = await hentHtml(url);
       const jsonLd = udtrækJsonLd(html);
-      jsonLdBillede = jsonLd?.billede ?? udtrækMeta(html, "og:image") ?? null;
-      kildeType = jsonLd && jsonLd.ingredienser.length > 0 ? "json-ld" : "tekst";
+      // Foretræk JSON-LD; ellers prøv microdata (fx valdemarsro) før rå tekst.
+      const struktur =
+        jsonLd && jsonLd.ingredienser.length > 0 ? jsonLd : udtrækMicrodata(html);
+      jsonLdBillede = struktur?.billede ?? udtrækMeta(html, "og:image") ?? null;
+      kildeType = struktur
+        ? (jsonLd && jsonLd.ingredienser.length > 0 ? "json-ld" : "microdata")
+        : "tekst";
 
       let raaTekst: string;
-      if (jsonLd && jsonLd.ingredienser.length > 0) {
+      if (struktur && struktur.ingredienser.length > 0) {
+        // Afkod entiteter på alle felter, så æøå/½ er korrekte i modellens input.
+        const navn = dekodEntiteter(struktur.navn ?? udtrækMeta(html, "og:title") ?? "");
         raaTekst =
-          `NAVN: ${jsonLd.navn ?? ""}\n` +
-          `PORTIONER (yield): ${jsonLd.portioner ?? ""}\n` +
-          `TID (minutter): ${isoTilMinutter(jsonLd.tid) ?? ""}\n\n` +
-          `INGREDIENSER:\n${jsonLd.ingredienser.map(i => `- ${i}`).join("\n")}\n\n` +
-          `FREMGANGSMÅDE:\n${jsonLd.fremgangsmaade.map((t, i) => `${i + 1}. ${t}`).join("\n")}`;
+          `NAVN: ${navn}\n` +
+          `PORTIONER (yield): ${dekodEntiteter(struktur.portioner ?? "")}\n` +
+          `TID (minutter): ${isoTilMinutter(struktur.tid) ?? ""}\n\n` +
+          `INGREDIENSER:\n${struktur.ingredienser.map(i => `- ${dekodEntiteter(i)}`).join("\n")}\n\n` +
+          `FREMGANGSMÅDE:\n${struktur.fremgangsmaade.map((t, i) => `${i + 1}. ${dekodEntiteter(t)}`).join("\n")}`;
       } else {
         raaTekst =
           `Siden har ikke struktureret opskrift-data. Find opskriften i denne ` +
