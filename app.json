@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "MadUgen",
-    "slug": "StudentLifeStyle",
+    "slug": "madugen",
     "owner": "oscar_isberg",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -39,7 +39,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "bf29642a-780b-4826-b12a-a15a3f0be3cf"
+        "projectId": "14e47b20-edb4-4df7-ab9c-35b0eef6dea4"
       }
     }
   }
