@@ -240,10 +240,10 @@ export default function ImportOpskriftModal({ synlig, butikker, onLuk, onGemt, o
               </Text>
             )}
 
-            <Text style={styles.label}>{metode === 'link' ? 'Indsæt opskrifts-link' : 'Fra link'}</Text>
+            <Text style={styles.label}>{metode === 'link' ? 'Indsæt link eller SoMe' : 'Fra link eller SoMe'}</Text>
             <TextInput
               style={styles.input}
-              placeholder="https://…"
+              placeholder="Link til opskrift, TikTok eller Instagram"
               placeholderTextColor={Colors.inkSoft}
               value={url}
               onChangeText={t => { setUrl(t); setFejl(null); }}

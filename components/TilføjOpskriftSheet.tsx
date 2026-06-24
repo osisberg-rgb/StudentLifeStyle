@@ -23,7 +23,7 @@ type Props = {
 const VALG: { key: TilføjMetode; ikon: keyof typeof Ionicons.glyphMap; titel: string; sub: string }[] = [
   { key: 'kamera',  ikon: 'camera-outline', titel: 'Tag billede',      sub: 'Fotografér opskriften' },
   { key: 'galleri', ikon: 'image-outline',  titel: 'Upload foto',      sub: 'Billede eller screenshot' },
-  { key: 'link',    ikon: 'link-outline',   titel: 'Importér fra link', sub: 'Indsæt et opskrifts-link' },
+  { key: 'link',    ikon: 'link-outline',   titel: 'Fra link eller SoMe', sub: 'Opskriftsside, TikTok eller Instagram' },
   { key: 'skriv',   ikon: 'create-outline', titel: 'Skriv selv',        sub: 'Indtast den manuelt' },
   { key: 'kogebog', ikon: 'library-outline', titel: 'Fra kogebog',      sub: 'Flere sidefotos på én gang' },
 ];
