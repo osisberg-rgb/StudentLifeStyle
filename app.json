@@ -39,7 +39,8 @@
           "cameraPermission": "MadUgen bruger kameraet til at tage et billede af en opskrift."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-notifications"
     ],
     "extra": {
       "eas": {
