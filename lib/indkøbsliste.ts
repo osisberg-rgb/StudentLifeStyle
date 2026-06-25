@@ -10,7 +10,7 @@ import { supabase } from './supabase';
 import { IndkoebsButik, IndkoebsVare } from '../types/madplan';
 import { kategoriserIngrediens, KATEGORI_ORDEN } from '../constants/indkoeb';
 
-export type TilbudInput = { butik: string; navn: string; pris: number; soeg?: string[] };
+export type TilbudInput = { butik: string; navn: string; pris: number; soeg?: string[]; maengde?: string };
 
 // Sortér sektioner i fast kategori-rækkefølge (ukendte kategorier sidst)
 function sortérSektioner(liste: IndkoebsButik[]): IndkoebsButik[] {
@@ -54,7 +54,10 @@ export function fletTilbudIListe(
   const nyVare: IndkoebsVare = {
     vare: t.navn,
     antal_pakker: 1,
-    pakkestoerrelse: '',
+    // Tilbuddets pakkestørrelse (fx "500 g") vises under navnet på listen — som
+    // for opskrift-varer. Mangler den (fx hardkodede tilbud uden maengde), bliver
+    // den tom, og kun navnet vises.
+    pakkestoerrelse: t.maengde ?? '',
     pris: t.pris,
     paa_tilbud: true,
     butik: t.butik,

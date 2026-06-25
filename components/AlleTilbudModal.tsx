@@ -45,7 +45,7 @@ export default function AlleTilbudModal({ synlig, butikker, ugeNr, onClose }: Pr
     if (tilføjede.has(nøgle)) return;
     // Optimistisk: marker med det samme, så knappen ikke kan dobbelt-trykkes
     setTilføjede(prev => new Set(prev).add(nøgle));
-    const resultat = await tilføjTilbudTilUge({ butik: t.butik, navn: t.navn, pris: t.pris, soeg: t.soeg }, ugeNr);
+    const resultat = await tilføjTilbudTilUge({ butik: t.butik, navn: t.navn, pris: t.pris, soeg: t.soeg, maengde: t.maengde }, ugeNr);
     if (resultat === 'fejl') {
       // Rul markeringen tilbage så man kan prøve igen
       setTilføjede(prev => {

@@ -246,13 +246,13 @@ export default function HomeScreen({ navigation }: Props) {
   }
 
   // Læg et enkelt tilbud direkte på ugens indkøbsliste (fra "Tilbud til dig")
-  async function tilføjTilbudPåListen(t: { butik: string; navn: string; tilbudspris: number; soeg: string[] }) {
+  async function tilføjTilbudPåListen(t: { butik: string; navn: string; tilbudspris: number; soeg: string[]; maengde?: string }) {
     const nøgle = `${t.butik}|${t.navn}`;
     if (tilføjedeTilbud.has(nøgle)) return;
     // Optimistisk ✓ med det samme — vend tilbage hvis det fejler
     setTilføjedeTilbud(prev => new Set(prev).add(nøgle));
     const res = await tilføjTilbudTilUge(
-      { butik: t.butik, navn: t.navn, pris: t.tilbudspris, soeg: t.soeg },
+      { butik: t.butik, navn: t.navn, pris: t.tilbudspris, soeg: t.soeg, maengde: t.maengde },
       weekNo,
     );
     if (res === 'fejl') {

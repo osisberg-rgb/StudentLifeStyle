@@ -69,9 +69,13 @@ export default function OpskriftDetaljeModal({ opskrift, butikker, personer, onL
     if (!ok) setFavorit(!ny); // rul tilbage ved fejl
   }
 
-  const ingredienser = (opskrift.ingredienser as any[]).filter(
-    i => !(i.estimeret && i.estimereretPris === 0)
-  );
+  // Vis ALLE ingredienser — også basisvarer (salt, peber, vand, olie, krydderier
+  // o.l.) som importeren markerer estimeret+0-pris. De får bare ingen pris/tilbuds-
+  // badge nedenfor (slåEffektivPrisOp giver paaTilbud=false for pris 0), og de
+  // holdes ude af indkøbsliste/pris-motor i deres egne guards (constants/indkoeb.ts,
+  // opskriftPriser.ts). Tidligere filtrerede vi dem væk her, så en gemt opskrift
+  // viste færre ingredienser end preview'et ("Tjek opskriften") gjorde.
+  const ingredienser = opskrift.ingredienser as any[];
 
   // Skaler til antal personer i hele opskrift-sæt (samme model som indkøbslisten)
   const basePortioner = opskrift.portioner || 4;
