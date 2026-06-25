@@ -17,9 +17,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Claude-model til tilbuds-aflæsning (ugentlig, fast omkostning — vælg en
-// stærkere model end opskrift-importen for at læse tætte avissider præcist).
-const CLAUDE_MODEL = "claude-sonnet-4-6";
+// Claude-model til tilbuds-aflæsning. Haiku (claude-haiku-4-5) er valgt for at
+// sænke omkostningen. Den er mindre præcis på tætte avissider, så prompten beder
+// eksplicit om at finde ALLE varer og vælge soeg-ord fra ordforrådet — kør et par
+// avis-sider igennem efter ændringer og vurder om kvaliteten holder.
+const CLAUDE_MODEL = "claude-haiku-4-5";
 
 // En data-URL (data:image/jpeg;base64,XXXX) → Anthropics billed-kilde-format.
 function dataUrlTilKilde(dataUrl: string): { media_type: string; data: string } {
@@ -83,15 +85,37 @@ function matcherSoegeord(tekst: string, soegeord: string): boolean {
 }
 
 type Vare = { navn: string; maengde: string; pris: number; soeg: string[] };
-type RaaVare = { navn: string; maengde?: string; pris: number; tilbudstype?: string; betingelse?: string };
+type RaaVare = { navn: string; maengde?: string; pris: number; soeg?: string[]; tilbudstype?: string; betingelse?: string };
 
-// Udled op til 3 soeg-ord fra varenavnet (mest specifikke ord først). soeg
-// kommer IKKE fra modellen længere — det stjæler fokus fra at finde ALLE varer.
+// FALLBACK-udledning af soeg fra varenavnet (mest specifikke ord først). Bruges
+// KUN når modellen ikke selv gav brugbare soeg-ord. Modellen er primær kilde,
+// fordi den forstår at fx "Coca-Cola" = sodavand og "Matilde kakaomælk" = mælk —
+// den rene navne-match her rammer ikke mærkenavne/sammensatte ord (det var
+// årsagen til at tilbud uden soeg blev usynlige for pris-motoren).
 function udledSoeg(navn: string): string[] {
   return SOEG_VOCAB
     .filter((vok) => matcherSoegeord(navn, vok))
     .sort((a, b) => b.length - a.length)
     .slice(0, 3);
+}
+
+// Hurtigt opslag til at validere modellens soeg-ord mod ordforrådet.
+const SOEG_SET = new Set(SOEG_VOCAB);
+
+// Sikkerhedsnet (Opgave 2): selv om prompten beder om kun mad/drikke, dropper vi
+// åbenlys non-food som modellen ved et uheld tager med. Bevidst KONSERVATIV liste
+// (kun entydige nøgleord) så vi aldrig taber rigtige fødevarer.
+const NONFOOD_ORD = [
+  "toiletpapir", "køkkenrulle", "husholdningsrulle", "servietter", "rengøring",
+  "rengørings", "vaskemiddel", "vaskepulver", "skyllemiddel", "opvasketabs",
+  "opvaskemiddel", "håndsæbe", "shampoo", "balsam", "tandpasta", "deodorant",
+  "kosmetik", "makeup", "mascara", "bleer", "vatpinde", "hundefoder", "hundemad",
+  "kattefoder", "kattemad", "kattegrus", "batterier", "lyspære", "glødepære",
+  "affaldsposer",
+];
+function erNonFood(navn: string): boolean {
+  const n = " " + navn.toLowerCase() + " ";
+  return NONFOOD_ORD.some((o) => n.includes(o));
 }
 
 Deno.serve(async (req) => {
@@ -132,17 +156,31 @@ Deno.serve(async (req) => {
       "når antallet er indholdet i én pakke (8 stk i én pose), og kun \"multibuy\" når " +
       "man skal købe flere separate pakker.\n" +
       "- betingelse: betingelsesteksten ordret hvis relevant (\"3 for 20\", \"spar 30%\", " +
-      "\"min. 2 stk\"), ellers \"\".\n\n" +
-      "MEDTAG: alle madvarer + drikkevarer (kaffe, sodavand, øl, vin, is).\n" +
-      "SPRING OVER: rene reklamer, opskrifter, konkurrencer, non-food (medmindre drikkevare).\n" +
-      "Er du i tvivl om en flise er en vare → MEDTAG den hellere.\n\n" +
+      "\"min. 2 stk\"), ellers \"\".\n" +
+      "- soeg: 0-3 ord VALGT FRA ORDLISTEN nedenfor, der beskriver varens TYPE, så " +
+      "prisen kan matche appens motor. Du kender varen bedre end et tekst-match: vælg " +
+      "fx \"sodavand\" til Coca-Cola/Fanta/Pepsi, \"mælk\" til kakaoskummetmælk, " +
+      "\"ost\" til skiveost/smelteost, \"grisekød\" til mørbrad af gris. Vælg de mest " +
+      "specifikke ord der passer. Brug KUN ord fra listen — opfind aldrig nye. Tom " +
+      "liste hvis intet ord passer.\n" +
+      "ORDLISTE: " + SOEG_VOCAB.join(", ") + "\n\n" +
+      "MEDTAG KUN spiselige eller drikkelige varer: fødevarer + drikkevarer (også " +
+      "kaffe, sodavand, øl, vin, is, slik, snacks).\n" +
+      "UDELAD ALT non-food — også selvom det er på tilbud: toiletpapir, køkkenrulle, " +
+      "servietter, rengøring, vaskemiddel, opvask, sæbe, shampoo, kosmetik, bleer, " +
+      "dyrefoder/kattegrus, batterier, køkken-/husholdningsartikler, blomster, tøj. " +
+      "Spring også rene reklamer, opskrifter og konkurrencer over.\n" +
+      "Er du i tvivl om en MAD-flise er en vare → MEDTAG den hellere. Er du i tvivl om " +
+      "noget er non-food → UDELAD det.\n\n" +
       "Returnér KUN JSON: " +
-      "{\"forventet_antal\":0,\"varer\":[{\"navn\":\"...\",\"maengde\":\"500 g\",\"pris\":0,\"tilbudstype\":\"stk\",\"betingelse\":\"\"}]}";
+      "{\"forventet_antal\":0,\"varer\":[{\"navn\":\"...\",\"maengde\":\"500 g\",\"pris\":0,\"soeg\":[\"...\"],\"tilbudstype\":\"stk\",\"betingelse\":\"\"}]}";
 
     const { media_type, data } = dataUrlTilKilde(billede);
     const res = await anthropic.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 4096,
+      // Plads til 30-40 varer PR. side med alle felter (nu også soeg). For lavt
+      // → JSON klippes midt i en vare og siden taber tilbud.
+      max_tokens: 8192,
       messages: [
         {
           role: "user",
@@ -160,16 +198,27 @@ Deno.serve(async (req) => {
     let parsed: { varer?: RaaVare[]; forventet_antal?: number };
     try { parsed = JSON.parse(raw); } catch { parsed = parseJson(raw); }
 
-    // Rens: kun gyldige priser; soeg-ord udledes fra navnet mod ordforrådet.
+    // Rens: kun gyldige priser. soeg kommer PRIMÆRT fra modellen (den ved at
+    // Coca-Cola = sodavand) — vi beholder kun ord der findes i ordforrådet, og
+    // falder tilbage på lokal navne-udledning hvis modellen ikke gav brugbare ord.
+    // Uden et gyldigt soeg-ord er et tilbud usynligt for pris-motoren.
     const varer: Vare[] = (parsed.varer ?? [])
       .filter((v) => v && typeof v.navn === "string" && Number.isFinite(Number(v.pris)))
-      .map((v) => ({
-        navn: String(v.navn).trim(),
-        maengde: String(v.maengde ?? "").trim(),
-        pris: Number(v.pris),
-        soeg: udledSoeg(String(v.navn)),
-      }))
-      .filter((v) => v.navn.length > 0 && v.pris > 0);
+      .map((v) => {
+        const navn = String(v.navn).trim();
+        const fraModel = (Array.isArray(v.soeg) ? v.soeg : [])
+          .map((s) => String(s).toLowerCase().trim())
+          .filter((s) => SOEG_SET.has(s));
+        const soeg = fraModel.length > 0 ? [...new Set(fraModel)].slice(0, 3) : udledSoeg(navn);
+        return {
+          navn,
+          maengde: String(v.maengde ?? "").trim(),
+          pris: Number(v.pris),
+          soeg,
+        };
+      })
+      // Sikkerhedsnet: fjern tomme/ugyldige rækker OG åbenlys non-food (Opgave 2).
+      .filter((v) => v.navn.length > 0 && v.pris > 0 && !erNonFood(v.navn));
 
     // forventet_antal lader cloud-scriptet opdage under-tælling og køre siden igen.
     return svar({ varer, forventet_antal: Number(parsed.forventet_antal) || varer.length }, 200);
