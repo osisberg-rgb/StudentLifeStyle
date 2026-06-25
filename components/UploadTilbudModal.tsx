@@ -4,6 +4,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, TextInput, Alert, Modal,
+  Animated, Easing,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { Colors, Radii } from '../constants/theme';
@@ -18,6 +19,39 @@ type Props = { synlig: boolean; onLuk: () => void };
 const STATUS_TEKST: Record<JobStatus['status'], string> = {
   afventer: 'Afventer …', koerer: 'Udtrækker …', faerdig: 'Færdig', fejl: 'Fejl',
 };
+
+// Fremdrifts-bar pr. butik. Skyen melder kun grov status (afventer/koerer/
+// faerdig/fejl) — ikke side-for-side — så mens den kører viser vi en animeret
+// "sweep", og fylder helt ud (grøn/rød) når butikken er færdig/fejlet.
+function FremgangBar({ status }: { status: JobStatus['status'] }) {
+  const [bredde, setBredde] = useState(0);
+  const x = useRef(new Animated.Value(0)).current;
+  const aktiv = status === 'afventer' || status === 'koerer';
+
+  useEffect(() => {
+    if (!aktiv || bredde === 0) return;
+    x.setValue(-0.4 * bredde);
+    const loop = Animated.loop(
+      Animated.timing(x, {
+        toValue: bredde, duration: 1100, easing: Easing.linear, useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [aktiv, bredde, x]);
+
+  const fuld = status === 'faerdig' || status === 'fejl';
+  const farve = status === 'fejl' ? Colors.red : Colors.green;
+  return (
+    <View style={styles.barTrack} onLayout={e => setBredde(e.nativeEvent.layout.width)}>
+      {fuld ? (
+        <View style={[styles.barFuld, { backgroundColor: farve }]} />
+      ) : (
+        <Animated.View style={[styles.barSweep, { transform: [{ translateX: x }] }]} />
+      )}
+    </View>
+  );
+}
 
 export default function UploadTilbudModal({ synlig, onLuk }: Props) {
   const [filer, setFiler] = useState<UploadFil[]>([]);
@@ -125,19 +159,33 @@ export default function UploadTilbudModal({ synlig, onLuk }: Props) {
             </View>
           ))}
 
-          {jobs.length > 0 && (
+          {jobs.length > 0 && (() => {
+            const færdige = jobs.filter(j => j.status === 'faerdig' || j.status === 'fejl').length;
+            const pct = Math.round((færdige / jobs.length) * 100);
+            return (
             <View style={styles.statusBoks}>
-              <Text style={styles.statusTitel}>Status</Text>
+              <View style={styles.statusHeader}>
+                <Text style={styles.statusTitel}>Status</Text>
+                <Text style={styles.statusOverskrift}>{færdige} af {jobs.length} færdige</Text>
+              </View>
+              {/* Samlet fremdrift på tværs af butikker */}
+              <View style={styles.overallTrack}>
+                <View style={[styles.overallFill, { width: `${pct}%` as `${number}%` }]} />
+              </View>
               {jobs.map(j => (
-                <View key={j.id} style={styles.statusRække}>
-                  <Text style={styles.statusButik}>{j.slug}</Text>
-                  <Text style={[styles.statusVærdi, j.status === 'fejl' && { color: Colors.red }, j.status === 'faerdig' && { color: Colors.green }]}>
-                    {STATUS_TEKST[j.status]}{j.status === 'faerdig' ? ` — ${j.antal} tilbud` : ''}
-                  </Text>
+                <View key={j.id} style={styles.statusItem}>
+                  <View style={styles.statusRække}>
+                    <Text style={styles.statusButik}>{j.slug}</Text>
+                    <Text style={[styles.statusVærdi, j.status === 'fejl' && { color: Colors.red }, j.status === 'faerdig' && { color: Colors.green }]}>
+                      {STATUS_TEKST[j.status]}{j.status === 'faerdig' ? ` — ${j.antal} tilbud` : ''}
+                    </Text>
+                  </View>
+                  <FremgangBar status={j.status} />
                 </View>
               ))}
             </View>
-          )}
+            );
+          })()}
         </ScrollView>
 
         <View style={styles.footer}>
@@ -192,10 +240,18 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card, borderRadius: Radii.card, borderWidth: 1, borderColor: Colors.line,
     padding: 16, marginTop: 8,
   },
-  statusTitel: { fontSize: 12, fontFamily: 'Inter_700Bold', color: Colors.inkSoft, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 },
-  statusRække: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
+  statusHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 },
+  statusTitel: { fontSize: 12, fontFamily: 'Inter_700Bold', color: Colors.inkSoft, textTransform: 'uppercase', letterSpacing: 0.8 },
+  statusOverskrift: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: Colors.green },
+  overallTrack: { height: 8, borderRadius: 4, backgroundColor: Colors.line, overflow: 'hidden', marginBottom: 14 },
+  overallFill: { height: '100%', borderRadius: 4, backgroundColor: Colors.green },
+  statusItem: { paddingVertical: 8 },
+  statusRække: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   statusButik: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: Colors.ink },
   statusVærdi: { fontSize: 14, fontFamily: 'Inter_400Regular', color: Colors.inkSoft },
+  barTrack: { height: 6, borderRadius: 3, backgroundColor: Colors.line, overflow: 'hidden', marginTop: 8 },
+  barFuld: { ...StyleSheet.absoluteFillObject, borderRadius: 3 },
+  barSweep: { position: 'absolute', top: 0, bottom: 0, width: '40%', borderRadius: 3, backgroundColor: Colors.green },
   footer: { padding: 20, borderTopWidth: 1, borderTopColor: Colors.line },
   sendKnap: { backgroundColor: Colors.green, borderRadius: Radii.btn, padding: 15, alignItems: 'center' },
   sendTekst: { color: '#fff', fontSize: 15, fontFamily: 'Inter_700Bold' },
