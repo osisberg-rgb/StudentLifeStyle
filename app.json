@@ -23,8 +23,10 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
+        "android.permission.RECORD_AUDIO",
         "android.permission.RECORD_AUDIO"
-      ]
+      ],
+      "package": "dk.madugen.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
