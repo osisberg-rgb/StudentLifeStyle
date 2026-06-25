@@ -123,12 +123,46 @@ export function erPrEnhed(navn: string): boolean {
   return PR_ENHED_RE.test(navn ?? '');
 }
 
+// Brede kategori-ord der IKKE alene må binde en ingrediens til et tilbud. De
+// dækker mange forskellige udskæringer (kylling = bryst, lår, inderfilet,
+// nuggets …; svinekød = mørbrad, hamburgerryg, kotelet …), så "billigst vinder"
+// ville ellers prissætte en mørbradret som hamburgerryg eller en bryst-ret som
+// nuggets. Et tilbud skal dele et SPECIFIKT ord med ingrediensen for at matche;
+// deler de kun et bredt ord, springes tilbuddet over (ingrediensen falder til
+// basispris frem for en forkert, billigere vare).
+const BREDE_KATEGORI_ORD = new Set([
+  'kylling', 'oksekød', 'oksekod', 'okse', 'svinekød', 'svinekod',
+  'grisekød', 'grisekod', 'kød', 'kod',
+]);
+
+// Forarbejdede/sammensatte varer er aldrig en gyldig erstatning for en rå
+// udskæring — en bryst-ret skal ikke prissættes som nuggets, og en mørbradret
+// ikke som hamburgerryg. Matches på tilbuddets NAVN og fravælger det, MEDMINDRE
+// opskriften selv beder om netop den vare (så bevares matchet). pølser/bacon/
+// leverpostej er bevidst IKKE her: de er selvstændige ingredienser med egen
+// basispris, og en opskrift der beder om dem skal stadig kunne matche.
+const FORARBEJDET_ORD = [
+  'nuggets', 'hamburgerryg', 'schnitzel', 'paneret', 'panerede', 'wienerschnitzel',
+];
+function erForarbejdet(tekst: string): boolean {
+  const n = ' ' + (tekst ?? '').toLowerCase() + ' ';
+  return FORARBEJDET_ORD.some(o => n.includes(o));
+}
+
 function slåTilbudOp(tekster: string[], butikker?: string[]): { pris: number; butik: string } | null {
+  // Beder opskriften selv om en forarbejdet vare? (så må den gerne matche den)
+  const ingrediensForarbejdet = tekster.some(t => erForarbejdet(t));
   let bedste: { pris: number; butik: string } | null = null;
   for (const kilde of aktiveTilbud(butikker)) {
     for (const vare of kilde.varer) {
       if (erPrEnhed(vare.navn)) continue;   // pr-enhed-pris er ikke en pakkepris
-      const matcher = vare.soeg.some(s => tekster.some(t => matcherSoegeord(t, s)));
+      // Forarbejdet tilbud må kun bruges hvis opskriften udtrykkeligt beder om det
+      if (erForarbejdet(vare.navn) && !ingrediensForarbejdet) continue;
+      // Match KUN på et specifikt delt ord — brede kategori-ord (kylling/
+      // svinekød/oksekød) alene binder ikke en udskæring til en anden vare.
+      const matcher = vare.soeg.some(
+        s => !BREDE_KATEGORI_ORD.has(s) && tekster.some(t => matcherSoegeord(t, s)),
+      );
       if (matcher && (!bedste || vare.pris < bedste.pris)) {
         bedste = { pris: vare.pris, butik: kilde.butik };
       }
