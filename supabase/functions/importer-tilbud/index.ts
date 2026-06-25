@@ -108,10 +108,13 @@ const SOEG_SET = new Set(SOEG_VOCAB);
 const NONFOOD_ORD = [
   "toiletpapir", "køkkenrulle", "husholdningsrulle", "servietter", "rengøring",
   "rengørings", "vaskemiddel", "vaskepulver", "skyllemiddel", "opvasketabs",
-  "opvaskemiddel", "håndsæbe", "shampoo", "balsam", "tandpasta", "deodorant",
+  "opvaskemiddel", "håndsæbe", "sæbe", "shampoo", "balsam", "tandpasta", "deodorant",
   "kosmetik", "makeup", "mascara", "bleer", "vatpinde", "hundefoder", "hundemad",
   "kattefoder", "kattemad", "kattegrus", "batterier", "lyspære", "glødepære",
-  "affaldsposer",
+  // "affald" fanger både affaldsposer og affaldposer; "pleje" fanger hud-/hår-/
+  // ansigtspleje (også med stavefejl som "hårtpleje"). Ingen fødevare indeholder
+  // disse delstrenge, så de er sikre at matche bredt.
+  "affald", "pleje",
 ];
 function erNonFood(navn: string): boolean {
   const n = " " + navn.toLowerCase() + " ";
