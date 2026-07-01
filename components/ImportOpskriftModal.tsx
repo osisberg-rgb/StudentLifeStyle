@@ -150,11 +150,13 @@ export default function ImportOpskriftModal({ synlig, butikker, onLuk, onGemt, o
         : await ImagePicker.launchImageLibraryAsync(valg);
       if (res.canceled || !res.assets?.[0]?.uri) { if (metode) onLuk(); return; }
 
-      // Skalér ned + komprimér til en lille base64 (native, hurtigt) inden afsendelse
+      // Skalér ned + komprimér til base64 (native, hurtigt) inden afsendelse.
+      // 1600px rammer Sonnet 5's høj-opløste vision bedre på tætte
+      // opskrift-screenshots; compress 0.6 holder data-URL'en nede.
       const ImageManipulator = await import('expo-image-manipulator');
       const lille = await ImageManipulator.manipulateAsync(
         res.assets[0].uri,
-        [{ resize: { width: 1024 } }],
+        [{ resize: { width: 1600 } }],
         { compress: 0.6, base64: true, format: ImageManipulator.SaveFormat.JPEG },
       );
       if (!lille.base64) {

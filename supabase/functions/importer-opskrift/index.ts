@@ -26,8 +26,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Claude-model til opskrift-import (billig, skalerer med antal brugere).
-const CLAUDE_MODEL = "claude-haiku-4-5";
+// Claude-model til opskrift-import. Sonnet 5 valgt for pålidelig aflæsning af
+// rodede social-captions og tætte opskrift-screenshots (høj-opløst vision).
+const CLAUDE_MODEL = "claude-sonnet-5";
 
 // En data-URL (data:image/jpeg;base64,XXXX) → Anthropics billed-kilde-format.
 function dataUrlTilKilde(dataUrl: string): { media_type: string; data: string } {
@@ -56,6 +57,69 @@ function parseJson(tekst: string): Record<string, unknown> {
     try { return JSON.parse(t.slice(start, slut + 1)); } catch { /* opgiv */ }
   }
   return {};
+}
+
+// ── Vision-aflæsning ──────────────────────────────────────────────────────
+// Kør vision-modellen på et billede (foto/screenshot) og returnér den parsede
+// opskrift. Bruges af både billede-flowet og social-fallbacket.
+async function læsBillede(
+  anthropic: Anthropic,
+  ordliste: string,
+  media_type: string,
+  data: string,
+): Promise<Record<string, unknown>> {
+  const svar = await anthropic.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 4000,
+    thinking: { type: "disabled" },
+    system: SYSTEM_PROMPT,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: ordliste +
+              "Læs madopskriften på dette billede (foto eller screenshot) og " +
+              "udtræk navn, ingredienser og fremgangsmåde. Er noget ulæseligt, " +
+              "så udelad det frem for at gætte.",
+          },
+          { type: "image", source: { type: "base64", media_type, data } },
+        ],
+      },
+    ],
+  });
+  return parseJson(udtrækTekst(svar));
+}
+
+// Hent et billede fra en URL og læs opskriften på det. Fallback når en
+// social-caption mangler (opskriften står på selve billedet). Returnerer
+// null hvis billedet ikke kan hentes/afkodes.
+async function læsBilledeFraUrl(
+  anthropic: Anthropic,
+  ordliste: string,
+  billedeUrl: string,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20000);
+    let res: Response;
+    try {
+      res = await fetch(billedeUrl, { headers: { "User-Agent": BROWSER_UA }, signal: ctrl.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!res.ok) return null;
+    const media_type = (res.headers.get("content-type") ?? "image/jpeg").split(";")[0].trim();
+    if (!/^image\//i.test(media_type)) return null;
+    const buf = new Uint8Array(await res.arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+    const data = btoa(bin);
+    return await læsBillede(anthropic, ordliste, media_type, data);
+  } catch {
+    return null;
+  }
 }
 
 // ── Ordforråd ────────────────────────────────────────────────────────────
@@ -436,7 +500,7 @@ Deno.serve(async (req) => {
     const anthropic = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY")! });
     const ordliste = `ORDLISTE (vælg soeg-ord herfra):\n${SOEG_VOCAB.join(", ")}\n\n`;
 
-    let opskrift: Record<string, unknown>;
+    let opskrift: Record<string, unknown> | undefined;
     let jsonLdBillede: string | null = null;
     let kildeType: string;
     let kildeNavn = harBillede ? "Eget billede" : domæne(url);
@@ -446,31 +510,11 @@ Deno.serve(async (req) => {
       // `billede` er en data-URL (data:image/...;base64,XXXX)
       kildeType = "billede";
       const { media_type, data } = dataUrlTilKilde(billede);
-      const svar = await anthropic.messages.create({
-        model: CLAUDE_MODEL,
-        max_tokens: 4000,
-        system: SYSTEM_PROMPT,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: ordliste +
-                  "Læs madopskriften på dette billede (foto eller screenshot) og " +
-                  "udtræk navn, ingredienser og fremgangsmåde. Er noget ulæseligt, " +
-                  "så udelad det frem for at gætte.",
-              },
-              { type: "image", source: { type: "base64", media_type, data } },
-            ],
-          },
-        ],
-      });
-      opskrift = parseJson(udtrækTekst(svar));
+      opskrift = await læsBillede(anthropic, ordliste, media_type, data);
     } else {
       // ── Link-flow ──
       const vært = domæne(url);
-      let raaTekst: string;
+      let raaTekst: string | null = null;
 
       if (erTikTok(vært) || erInstagram(vært)) {
         // ── Social-medie: opskriften står i video-beskrivelsen, ikke videoen ──
@@ -481,15 +525,28 @@ Deno.serve(async (req) => {
         jsonLdBillede = social.billede;
         if (social.forfatter) kildeNavn = social.forfatter;
         if (social.caption.trim().length < 15) {
-          return json({
-            error:
-              "Kunne ikke finde en opskrift i beskrivelsen. Står opskriften i " +
-              "billedteksten/beskrivelsen til opslaget?",
-          }, 422);
+          // Captionen mangler → opskriften står formentlig på selve billedet.
+          // Fald tilbage til at læse opslagets billede med vision-modellen.
+          const fraBillede = social.billede
+            ? await læsBilledeFraUrl(anthropic, ordliste, social.billede)
+            : null;
+          if (
+            fraBillede && Array.isArray(fraBillede.ingredienser) &&
+            fraBillede.ingredienser.length > 0
+          ) {
+            opskrift = fraBillede;
+          } else {
+            return json({
+              error:
+                "Kunne ikke finde en opskrift i beskrivelsen. Står opskriften i " +
+                "billedteksten/beskrivelsen til opslaget?",
+            }, 422);
+          }
+        } else {
+          raaTekst =
+            `Dette er BESKRIVELSEN fra et ${kildeType}-opslag. Find opskriften i ` +
+            `teksten og ignorér intro-snak, emojis og hashtags:\n\n${social.caption}`;
         }
-        raaTekst =
-          `Dette er BESKRIVELSEN fra et ${kildeType}-opslag. Find opskriften i ` +
-          `teksten og ignorér intro-snak, emojis og hashtags:\n\n${social.caption}`;
       } else {
         // ── Normal opskriftsside: JSON-LD → microdata → tekst ──
         const html = await hentHtml(url);
@@ -518,15 +575,24 @@ Deno.serve(async (req) => {
         }
       }
 
-      const svar = await anthropic.messages.create({
-        model: CLAUDE_MODEL,
-        max_tokens: 4000,
-        system: SYSTEM_PROMPT,
-        messages: [
-          { role: "user", content: ordliste + `RÅ OPSKRIFT:\n${raaTekst}` },
-        ],
-      });
-      opskrift = parseJson(udtrækTekst(svar));
+      // Kun når vi har rå tekst (JSON-LD/microdata/sidetekst/social-caption);
+      // social-fallbacket har allerede sat `opskrift` fra billedet.
+      if (raaTekst !== null) {
+        const svar = await anthropic.messages.create({
+          model: CLAUDE_MODEL,
+          max_tokens: 4000,
+          thinking: { type: "disabled" },
+          system: SYSTEM_PROMPT,
+          messages: [
+            { role: "user", content: ordliste + `RÅ OPSKRIFT:\n${raaTekst}` },
+          ],
+        });
+        opskrift = parseJson(udtrækTekst(svar));
+      }
+    }
+
+    if (!opskrift) {
+      return json({ error: "Kunne ikke udtrække en opskrift fra kilden." }, 422);
     }
 
     // Deterministisk validering: markér ingredienser vi ikke kan prissætte,
