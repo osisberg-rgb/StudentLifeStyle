@@ -45,3 +45,6 @@ supabase/.temp/
 /android
 
 scripts/.cron-secret
+
+# graphify — generated graph output, machine-local paths/cache, regeneratable via /graphify .
+graphify-out/

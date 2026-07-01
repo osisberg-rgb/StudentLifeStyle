@@ -48,3 +48,13 @@ React Native + Expo + TypeScript (strict) on the front; Supabase (Auth, Postgres
 - `importer-tilbud` — one weekly-deal page (image) → `{ varer: [{ navn, maengde, pris, soeg }], forventet_antal }` via Claude vision (`claude-haiku-4-5`). The **model** picks `soeg` from a fixed vocab (it knows Coca-Cola → `sodavand`); `udledSoeg(navn)` is the local fallback when the model returns none. Without a `soeg` an offer can't reach the price engine, so it's invisible to shopping-list/best-offers/price-comparison. Prompt also restricts to food/drink, with a conservative `erNonFood` safety net. Invoked by `scripts/opdater-tilbud.ps1`/`.mjs` (the weekly PDF→`tilbud`-table pipeline), **not** the app.
 - `send-tilbud-notifikationer` — deal notifications. Matches the `watchlist` table against the current week's `tilbud` (using the same `getWeekNumber()` formula as the app, **not** ISO week) in each user's `profiles.stores`, dedups via the `notifikationer_sendt` ledger, and sends via the Expo Push API. Idempotent; guarded by the `CRON_SECRET` env var (header `x-cron-secret`); deployed with `--no-verify-jwt` so `pg_cron` (daily, via `pg_net`) can call it. `?dry_run=1` returns the plan without sending. Client registers push tokens (`lib/notifikationer.ts`, requires an EAS dev build) and watches items (`lib/watchlist.ts`, `components/KlokkeKnap.tsx`). SQL helpers: `scripts/sb-sql.ps1` / `scripts/sb-token.ps1`. Spec/plan in `docs/superpowers/`.
 - `dynamic-action` — legacy GPT plan generator; kept in the tree but no longer invoked by the current app.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
