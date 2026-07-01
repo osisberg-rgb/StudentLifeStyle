@@ -17,6 +17,7 @@ import {
 import { harTilladelse, registrérForPush, afmeldPush } from '../lib/notifikationer';
 import { erAdmin } from '../lib/admin';
 import UploadTilbudModal from '../components/UploadTilbudModal';
+import ManuelTilbudModal from '../components/ManuelTilbudModal';
 
 const ALLE_BUTIKKER = ['Netto', 'Rema 1000', 'Føtex', 'SuperBrugsen', 'Bilka', 'Lidl', 'Meny', '365discount', 'Kvikly'];
 
@@ -28,6 +29,7 @@ export default function ProfilScreen() {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [historikÅben, setHistorikÅben] = useState(false);
   const [uploadÅben, setUploadÅben] = useState(false);
+  const [manuelÅben, setManuelÅben] = useState(false);
   const [watch, setWatch] = useState<WatchRække[]>([]);
   const [nyVare, setNyVare] = useState('');
   const [notiTil, setNotiTil] = useState(false);
@@ -230,6 +232,12 @@ export default function ProfilScreen() {
                 <Text style={styles.rækkeLabel}>Upload tilbudsavis</Text>
                 <Text style={styles.værditekst}>›</Text>
               </TouchableOpacity>
+              <Separator />
+              <TouchableOpacity style={styles.række} onPress={() => setManuelÅben(true)}>
+                <Text style={styles.rækkIkon}>✍️</Text>
+                <Text style={styles.rækkeLabel}>Indtast tilbud manuelt</Text>
+                <Text style={styles.værditekst}>›</Text>
+              </TouchableOpacity>
             </View>
           </>
         )}
@@ -299,6 +307,7 @@ export default function ProfilScreen() {
         onLuk={() => setHistorikÅben(false)}
       />
       <UploadTilbudModal synlig={uploadÅben} onLuk={() => setUploadÅben(false)} />
+      <ManuelTilbudModal synlig={manuelÅben} onLuk={() => setManuelÅben(false)} />
     </SafeAreaView>
   );
 }
