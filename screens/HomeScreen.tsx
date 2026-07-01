@@ -9,7 +9,7 @@ import ButiksPill from '../components/ButiksPill';
 import OpskriftDetaljeModal from '../components/OpskriftDetaljeModal';
 import AlleTilbudModal from '../components/AlleTilbudModal';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
+import { supabase, sikrProfilRad } from '../lib/supabase';
 import { Ingrediens, Madplan } from '../types/madplan';
 import { bedsteTilbud, aktiveTilbud, tilbudTilDig } from '../constants/tilbudspriser';
 import { synkroniserTilbud } from '../lib/tilbudSync';
@@ -199,7 +199,7 @@ export default function HomeScreen({ navigation }: Props) {
     setMadplan(nyPlan);
     const { data: { user: u } } = await supabase.auth.getUser();
     if (!u) return;
-    await supabase.from('profiles').upsert({ id: u.id }, { onConflict: 'id', ignoreDuplicates: true });
+    await sikrProfilRad(u.id);
     await supabase.from('madplaner').upsert({
       user_id: u.id, uge_nr: weekNo, plan: nyPlan,
       total_pris: nyPlan.indkoebspris ?? 0, total_spar: nyPlan.besparelse ?? 0,
@@ -234,7 +234,7 @@ export default function HomeScreen({ navigation }: Props) {
       const nyPlan: Madplan = { ...basisPlan, indkoebsliste: samletListe, indkoebspris: nyTotal, besparelse: nySpar };
       const { data: { user: u } } = await supabase.auth.getUser();
       if (u) {
-        await supabase.from('profiles').upsert({ id: u.id }, { onConflict: 'id', ignoreDuplicates: true });
+        await sikrProfilRad(u.id);
         await supabase.from('madplaner').upsert({
           user_id: u.id, uge_nr: weekNo, plan: nyPlan, total_pris: nyTotal, total_spar: nySpar,
         }, { onConflict: 'user_id,uge_nr' });

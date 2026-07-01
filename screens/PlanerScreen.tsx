@@ -10,7 +10,7 @@ import OpskriftModal from '../components/OpskriftModal';
 import VælgRetterModal from '../components/VælgRetterModal';
 import OpskriftDetaljeModal from '../components/OpskriftDetaljeModal';
 import VælgDagModal, { VælgDag } from '../components/VælgDagModal';
-import { supabase } from '../lib/supabase';
+import { supabase, sikrProfilRad } from '../lib/supabase';
 import { Madplan, Dag, Maltid, Ingrediens } from '../types/madplan';
 import { findOpskrift, alleOpskrifter } from '../lib/brugerOpskrifter';
 import type { Opskrift } from '../types/opskrift';
@@ -275,7 +275,7 @@ export default function PlanerScreen() {
 
     const { data: { user: u } } = await supabase.auth.getUser();
     if (!u) { Alert.alert('Fejl', 'Du er ikke logget ind'); return; }
-    await supabase.from('profiles').upsert({ id: u.id }, { onConflict: 'id', ignoreDuplicates: true });
+    await sikrProfilRad(u.id);
     const { error } = await supabase.from('madplaner').upsert({
       user_id: u.id,
       uge_nr: uge,
@@ -319,7 +319,7 @@ export default function PlanerScreen() {
 
     const { data: { user: u } } = await supabase.auth.getUser();
     if (!u) { Alert.alert('Fejl', 'Du er ikke logget ind'); return; }
-    await supabase.from('profiles').upsert({ id: u.id }, { onConflict: 'id', ignoreDuplicates: true });
+    await sikrProfilRad(u.id);
     const { error } = await supabase.from('madplaner').upsert({
       user_id: u.id,
       uge_nr: uge,

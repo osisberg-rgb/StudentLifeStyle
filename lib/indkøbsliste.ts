@@ -6,7 +6,7 @@
 // bygIndkøbsliste. Sektionens `butik`-felt bærer kategori-navnet; den enkelte
 // vares `butik` bærer butikken (kun sat når varen er på tilbud) og vises som
 // farvet butiks-badge på selve varen.
-import { supabase } from './supabase';
+import { supabase, sikrProfilRad } from './supabase';
 import { IndkoebsButik, IndkoebsVare } from '../types/madplan';
 import { kategoriserIngrediens, KATEGORI_ORDEN } from '../constants/indkoeb';
 
@@ -110,7 +110,7 @@ export async function tilføjTilbudTilUge(
     if (!tilføjet) return 'findes';
 
     const nyPlan = { ...plan, indkoebsliste: liste };
-    await supabase.from('profiles').upsert({ id: u.id }, { onConflict: 'id', ignoreDuplicates: true });
+    await sikrProfilRad(u.id);
     const { error } = await supabase.from('madplaner').upsert(
       { user_id: u.id, uge_nr: ugeNr, plan: nyPlan },
       { onConflict: 'user_id,uge_nr' }

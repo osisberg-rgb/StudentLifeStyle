@@ -6,7 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Colors, Radii } from '../constants/theme';
 import ButiksPill from '../components/ButiksPill';
 import TilføjVareModal from '../components/TilføjVareModal';
-import { supabase } from '../lib/supabase';
+import { supabase, sikrProfilRad } from '../lib/supabase';
 import { IndkoebsButik, IndkoebsVare } from '../types/madplan';
 import { TilbudsTræf } from '../constants/tilbudSøg';
 import { fletTilbudIListe, fletFriVareIListe } from '../lib/indkøbsliste';
@@ -96,7 +96,7 @@ export default function IndkøbScreen() {
     // manuelt uden først at generere en madplan.
     const { data: { user: u } } = await supabase.auth.getUser();
     if (!u) return;
-    await supabase.from('profiles').upsert({ id: u.id }, { onConflict: 'id', ignoreDuplicates: true });
+    await sikrProfilRad(u.id);
     const { error } = await supabase.from('madplaner').upsert(
       { user_id: u.id, uge_nr: uge, plan: nyPlan },
       { onConflict: 'user_id,uge_nr' }

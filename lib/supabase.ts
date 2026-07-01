@@ -18,3 +18,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: false,
   },
 });
+
+// `madplaner`-rækker har en FK til `profiles`, så enhver skrivning til
+// madplaner skal først sikre at brugerens profil-række findes.
+export async function sikrProfilRad(userId: string) {
+  await supabase.from('profiles').upsert({ id: userId }, { onConflict: 'id', ignoreDuplicates: true });
+}
